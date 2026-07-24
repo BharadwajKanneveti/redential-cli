@@ -78,7 +78,9 @@ describe("prompt EOF handling", () => {
   it("promptConfirmAttestation rejects when input closes before an answer", async () => {
     await expect(
       promptConfirmAttestation({ input: endedInput(), output: sinkOutput() })
-    ).rejects.toBeInstanceOf(ScanError);
+    ).rejects.toThrow(
+      "Input closed before authorization was confirmed. Use --author <email> and --yes for non-interactive runs."
+    );
   });
 
   it("promptAuthors rejects when input closes before an answer", async () => {
@@ -87,7 +89,9 @@ describe("prompt EOF handling", () => {
         input: endedInput(),
         output: sinkOutput(),
       })
-    ).rejects.toBeInstanceOf(ScanError);
+    ).rejects.toThrow(
+      "Input closed before an author identity was selected. Use --author <email> and --yes for non-interactive runs."
+    );
   });
 
   it("promptConfirmUpload rejects when input closes before an answer", async () => {
@@ -99,7 +103,9 @@ describe("prompt EOF handling", () => {
   it("promptUseGitIdentity rejects when input closes before an answer", async () => {
     await expect(
       promptUseGitIdentity({ email: "a@example.com", count: 1 }, { input: endedInput(), output: sinkOutput() })
-    ).rejects.toBeInstanceOf(ScanError);
+    ).rejects.toThrow(
+      "Input closed before an author identity was selected. Use --author <email> and --yes for non-interactive runs."
+    );
   });
 
   it("promptContinueLocally rejects when input closes before an answer", async () => {
