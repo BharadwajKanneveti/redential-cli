@@ -8,7 +8,21 @@ always bump at least minor; breaking schema changes bump major.
 ## [Unreleased]
 
 ### Fixed
+- Fix the author identity prompt showing "1 commits" instead of "1 commit" when a single commit is found.
 - Improved non-interactive prompt errors by adding actionable guidance to use `--author <email>` and `--yes` when author identity selection or authorization confirmation cannot be completed because input is unavailable.
+
+### Added
+- Add `validation/zod` to the closed skill taxonomy for Zod work.
+- Add `frontend/storybook` to the closed skill taxonomy for Storybook work.
+
+### Changed
+- Principle 2 ("Explicit") amended per RFC #13: append-only local state
+  (a future session-receipt vault) is explicitly permitted; resident
+  processes, hooks, IDE plugins, and any auto-emit remain forbidden. The
+  vault's permitted readers are enumerated (`session finish`, a voluntary
+  future `redential anchor`, `submit`); extending Principle 1's network
+  list for `redential anchor` is deferred to its own future ceremony.
+  Wording co-authored with @rudi193-cmd. Docs only — no behavior change.
 
 
 ## [0.6.0] - 2026-07-22
