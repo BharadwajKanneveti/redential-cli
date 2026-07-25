@@ -7,9 +7,13 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+### Fixed
+- Fix the author identity prompt showing "1 commits" instead of "1 commit" when a single commit is found.
+- Improved non-interactive prompt errors by adding actionable guidance to use `--author <email>` and `--yes` when author identity selection or authorization confirmation cannot be completed because input is unavailable.
+
 ### Added
-- Add `validation/zod` to the closed skill taxonomy for Zod work
-- Add `frontend/storybook` to the closed skill taxonomy for Storybook work
+- Add `validation/zod` to the closed skill taxonomy for Zod work.
+- Add `frontend/storybook` to the closed skill taxonomy for Storybook work.
 
 ### Changed
 - Principle 2 ("Explicit") amended per RFC #13: append-only local state
@@ -20,8 +24,6 @@ always bump at least minor; breaking schema changes bump major.
   list for `redential anchor` is deferred to its own future ceremony.
   Wording co-authored with @rudi193-cmd. Docs only — no behavior change.
 
-### Fixed
-- Fix the author identity prompt showing "1 commits" instead of "1 commit" when a single commit is found.
 
 ## [0.6.0] - 2026-07-22
 

@@ -57,7 +57,7 @@ export async function promptAuthors(
       const answer = await questionOrThrowOnClose(
         rl,
         formatIdentityConfirmationPrompt(only),
-        "Input closed before an author identity was selected."
+        "Input closed before an author identity was selected. Use --author <email> and --yes for non-interactive runs."
       );
       const trimmed = answer.trim().toLowerCase();
       return trimmed === "" || trimmed.startsWith("y") ? [only.email] : [];
@@ -70,7 +70,7 @@ export async function promptAuthors(
     const answer = await questionOrThrowOnClose(
       rl,
       "Enter the numbers, comma-separated (e.g. 1,3): ",
-      "Input closed before an author identity was selected."
+      "Input closed before an author identity was selected. Use --author <email> and --yes for non-interactive runs."
     );
     const indices = answer
       .split(",")
@@ -97,7 +97,7 @@ export async function promptUseGitIdentity(
     const answer = await questionOrThrowOnClose(
       rl,
       formatIdentityConfirmationPrompt(candidate),
-      "Input closed before an author identity was selected."
+      "Input closed before an author identity was selected. Use --author <email> and --yes for non-interactive runs."
     );
     const trimmed = answer.trim().toLowerCase();
     return trimmed === "" || trimmed.startsWith("y");
@@ -124,7 +124,7 @@ export async function promptConfirmAttestation(
     const answer = await questionOrThrowOnClose(
       rl,
       `${ATTESTATION_TEXT} (y/N) `,
-      "Input closed before authorization was confirmed."
+      "Input closed before authorization was confirmed. Use --author <email> and --yes for non-interactive runs."
     );
     return answer.trim().toLowerCase().startsWith("y");
   } finally {
