@@ -177,7 +177,7 @@ export async function promptPrivateLabel(streams: PromptStreams = DEFAULT_STREAM
       const answer = await questionOrThrowOnClose(
         rl,
         PRIVATE_LABEL_PROMPT_TEXT,
-        "Input closed before a private label was entered."
+        "Input closed before a private label was entered. Use --label for non-interactive runs."
       );
       try {
         return validatePrivateLabel(answer);
@@ -207,7 +207,7 @@ export async function promptConfirmUpload(streams: PromptStreams = DEFAULT_STREA
     const answer = await questionOrThrowOnClose(
       rl,
       "Upload this bundle? (y/n) ",
-      "Input closed before the upload was confirmed."
+      "Input closed before the upload was confirmed. Use --confirm-upload for non-interactive runs."
     );
     return answer.trim().toLowerCase().startsWith("y");
   } finally {

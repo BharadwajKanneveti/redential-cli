@@ -97,7 +97,9 @@ describe("prompt EOF handling", () => {
   it("promptConfirmUpload rejects when input closes before an answer", async () => {
     await expect(
       promptConfirmUpload({ input: endedInput(), output: sinkOutput() })
-    ).rejects.toBeInstanceOf(ScanError);
+    ).rejects.toThrow(
+      "Input closed before the upload was confirmed. Use --confirm-upload for non-interactive runs."
+    );
   });
 
   it("promptUseGitIdentity rejects when input closes before an answer", async () => {
@@ -117,7 +119,9 @@ describe("prompt EOF handling", () => {
   it("promptPrivateLabel rejects when input closes before an answer", async () => {
     await expect(
       promptPrivateLabel({ input: endedInput(), output: sinkOutput() })
-    ).rejects.toBeInstanceOf(ScanError);
+    ).rejects.toThrow(
+      "Input closed before a private label was entered. Use --label for non-interactive runs."
+    );
   });
 });
 
