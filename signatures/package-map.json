@@ -130,6 +130,7 @@
     "@prisma/client": "db/prisma",
     "@prisma/extension-accelerate": "db/prisma",
     "@prisma/migrate": "db/prisma",
+    "prisma": "db/prisma",
     "drizzle-orm": "db/drizzle",
     "drizzle-kit": "db/drizzle",
     "drizzle-zod": "db/drizzle",
@@ -356,6 +357,7 @@
     "@cloudflare/kv-asset-handler": "infra/cloudflare-workers",
     "@cloudflare/next-on-pages": "infra/cloudflare-workers",
     "miniflare": "infra/cloudflare-workers",
+    "wrangler": "infra/cloudflare-workers",
 
     "@trigger.dev/sdk": "queues/trigger-dev",
     "@trigger.dev/nextjs": "queues/trigger-dev",

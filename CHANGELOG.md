@@ -7,6 +7,9 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+### Fixed
+- Map the `prisma` and `wrangler` packages to their existing taxonomy slugs, closing package detection gaps.
+
 ### Added
 - Add `validation/zod` to the closed skill taxonomy for Zod work
 - Add `frontend/storybook` to the closed skill taxonomy for Storybook work
