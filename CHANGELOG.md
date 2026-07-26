@@ -10,6 +10,7 @@ always bump at least minor; breaking schema changes bump major.
 ### Fixed
 - Fix the author identity prompt showing "1 commits" instead of "1 commit" when a single commit is found.
 - Improved non-interactive prompt errors by adding actionable guidance to use `--author <email>` and `--yes` when author identity selection or authorization confirmation cannot be completed because input is unavailable.
+- Improved non-interactive submit prompt errors by adding actionable guidance to use `--confirm-upload` and `--label` when upload confirmation or private label input cannot be completed because input is unavailable.
 
 ### Added
 - Add `validation/zod` to the closed skill taxonomy for Zod work.
