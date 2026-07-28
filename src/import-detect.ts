@@ -34,6 +34,7 @@ function languageForPath(filePath: string): ImportLanguage | null {
   if (ext === ".go") return "go";
   if (ext === ".rb" || lower.endsWith("/gemfile") || lower === "gemfile") return "ruby";
   if (ext === ".php" || lower.endsWith("/composer.json") || lower === "composer.json") return "php";
+  if (lower.endsWith("/package.json") || lower === "package.json") return "js";
   if (ext === ".rs" || lower.endsWith("/cargo.toml") || lower === "cargo.toml") return "rust";
   if (ext === ".java") return "java";
   if (ext === ".kt" || ext === ".kts") return "kotlin";
@@ -126,7 +127,7 @@ function normalizeJs(raw: string): string {
   return raw.split("/")[0];
 }
 
-function extractJs(text: string): string[] {
+function extractJsImports(text: string): string[] {
   const found: string[] = [];
   // import ... from "pkg" / export ... from "pkg" (also covers `export * from`,
   // `export { x } from`, and multi-line named-import lists via [\s\S]*?).
@@ -167,6 +168,51 @@ function extractJs(text: string): string[] {
     found.push(normalizeJs(m[1]));
   }
   return found;
+}
+
+const PACKAGE_JSON_DEPS_HEADER = /^"(dependencies|devDependencies|peerDependencies)"\s*:\s*\{$/;
+const PACKAGE_JSON_DEP_LINE = /^"([^"]+)"\s*:/;
+
+function extractPackageJson(text: string): string[] {
+  const found: string[] = [];
+  let dependencyDepth = 0;
+  let scanningDependencies = false;
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (isCommentLine(rawLine)) continue;
+    const line = rawLine.trim();
+    if (PACKAGE_JSON_DEPS_HEADER.test(line)) {
+      scanningDependencies = true;
+      dependencyDepth = 1;
+      continue;
+    }
+
+    if (!scanningDependencies) continue;
+
+    if (line.includes("{")) {
+      dependencyDepth++;
+    }
+    if (line.includes("}")) {
+      dependencyDepth--;
+
+      if (dependencyDepth === 0) {
+        scanningDependencies = false;
+      }
+      continue;
+    }
+    const dep = PACKAGE_JSON_DEP_LINE.exec(line);
+    if (dep) {
+      found.push(dep[1]);
+    }
+  }
+
+  return found;
+}
+function extractJs(text: string, filePath: string): string[] {
+    return /package\.json$/i.test(filePath)
+    ? extractPackageJson(text)
+    : extractJsImports(text);
 }
 
 function extractPython(text: string): string[] {
@@ -506,7 +552,7 @@ export function extractImportedPackages(addedLines: string, filePath: string): s
     isComposerJson || isCargoToml || isCsproj ? addedLines : stripNonCodeRegions(addedLines);
   switch (language) {
     case "js":
-      return extractJs(text);
+      return extractJs(text, filePath);
     case "python":
       return extractPython(text);
     case "go":

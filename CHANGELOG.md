@@ -8,6 +8,7 @@ always bump at least minor; breaking schema changes bump major.
 ## [Unreleased]
 
 ### Fixed
+- Detect package additions from `package.json` dependency blocks (`dependencies`, `devDependencies`, and `peerDependencies`) as Tier 1 evidence using the existing package signature map.
 - Map the `prisma` and `wrangler` packages to their existing taxonomy slugs, closing package detection gaps.
 - Fix the author identity prompt showing "1 commits" instead of "1 commit" when a single commit is found.
 - Improved non-interactive prompt errors by adding actionable guidance to use `--author <email>` and `--yes` when author identity selection or authorization confirmation cannot be completed because input is unavailable.
