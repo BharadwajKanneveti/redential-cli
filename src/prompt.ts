@@ -44,7 +44,8 @@ function formatIdentityConfirmationPrompt(c: AuthorCandidate): string {
 
 export async function promptAuthors(
   candidates: AuthorCandidate[],
-  streams: PromptStreams = DEFAULT_STREAMS
+  streams: PromptStreams = DEFAULT_STREAMS,
+  preselectedEmails?: string[]
 ): Promise<string[]> {
   const rl = createInterface(streams);
   try {
@@ -67,16 +68,59 @@ export async function promptAuthors(
     candidates.forEach((c, i) => {
       console.log(`  ${i + 1}. ${formatCandidate(c)}`);
     });
+
+    // Identity-selection-memory milestone (2026-07): when a previous saved
+    // selection is passed in, an empty answer (bare Enter) falls back to it
+    // instead of always meaning "none selected" — but only for the still-
+    // present emails, and only when at least one of them still matches a
+    // candidate (otherwise the prompt and behavior stay byte-identical to
+    // before this milestone).
+    const preselectedIndices = (preselectedEmails ?? [])
+      .map((email) => candidates.findIndex((c) => c.email === email))
+      .filter((i) => i >= 0);
+    const questionText =
+      preselectedIndices.length > 0
+        ? `Enter the numbers, comma-separated (e.g. 1,3) [Enter = ${preselectedIndices.map((i) => i + 1).join(",")}]: `
+        : "Enter the numbers, comma-separated (e.g. 1,3): ";
+
     const answer = await questionOrThrowOnClose(
       rl,
-      "Enter the numbers, comma-separated (e.g. 1,3): ",
+      questionText,
       "Input closed before an author identity was selected. Use --author <email> and --yes for non-interactive runs."
     );
+    if (answer.trim() === "" && preselectedIndices.length > 0) {
+      return [...new Set(preselectedIndices.map((i) => candidates[i].email))];
+    }
     const indices = answer
       .split(",")
       .map((s) => parseInt(s.trim(), 10) - 1)
       .filter((i) => i >= 0 && i < candidates.length);
     return [...new Set(indices.map((i) => candidates[i].email))];
+  } finally {
+    rl.close();
+  }
+}
+
+/**
+ * Offers a previously saved identity selection (identity-selection-store.ts)
+ * as a fast Y/n confirmation before falling back to the full numbered list —
+ * only ever called when the saved selection's author-list hash still
+ * matches the repo's current candidates (build-bundle.ts). Y-default, same
+ * pattern as promptUseGitIdentity/promptContinueLocally.
+ */
+export async function promptUseSavedSelection(
+  authors: string[],
+  streams: PromptStreams = DEFAULT_STREAMS
+): Promise<boolean> {
+  const rl = createInterface(streams);
+  try {
+    const answer = await questionOrThrowOnClose(
+      rl,
+      `Use your saved identity selection: ${authors.join(", ")}? (Y/n) `,
+      "Input closed before an author identity was selected. Use --author <email> and --yes for non-interactive runs."
+    );
+    const trimmed = answer.trim().toLowerCase();
+    return trimmed === "" || trimmed.startsWith("y");
   } finally {
     rl.close();
   }

@@ -7,6 +7,7 @@ import {
   promptContinueLocally,
   promptPrivateLabel,
   promptUseGitIdentity,
+  promptUseSavedSelection,
 } from "../src/prompt.js";
 import { ScanError } from "../src/scan.js";
 
@@ -114,6 +115,14 @@ describe("prompt EOF handling", () => {
     await expect(
       promptContinueLocally({ input: endedInput(), output: sinkOutput() })
     ).rejects.toBeInstanceOf(ScanError);
+  });
+
+  it("promptUseSavedSelection rejects when input closes before an answer", async () => {
+    await expect(
+      promptUseSavedSelection(["a@example.com"], { input: endedInput(), output: sinkOutput() })
+    ).rejects.toThrow(
+      "Input closed before an author identity was selected. Use --author <email> and --yes for non-interactive runs."
+    );
   });
 
   it("promptPrivateLabel rejects when input closes before an answer", async () => {
@@ -311,5 +320,84 @@ describe("promptAuthors — 2+ candidates (numbered list, unchanged)", () => {
   it("ignores out-of-range numbers", async () => {
     const result = await promptAuthors(candidates, { input: lineInput("1,9"), output: sinkOutput() });
     expect(result).toEqual(["a@example.com"]);
+  });
+
+  it("an empty answer returns [] when no preselected emails are given (byte-identical to before)", async () => {
+    const result = await promptAuthors(candidates, { input: lineInput(""), output: sinkOutput() });
+    expect(result).toEqual([]);
+  });
+});
+
+describe("promptAuthors — 2+ candidates with a preselected saved selection", () => {
+  const candidates = [
+    { email: "a@example.com", count: 3 },
+    { email: "b@example.com", count: 1 },
+    { email: "c@example.com", count: 2 },
+  ];
+
+  it("prompt text includes '[Enter = <n1>,<n2>]' for the still-present preselected emails", async () => {
+    const out = captureOutput();
+    await promptAuthors(candidates, { input: lineInput(""), output: out.stream }, [
+      "a@example.com",
+      "c@example.com",
+    ]);
+    expect(out.text()).toContain("Enter the numbers, comma-separated (e.g. 1,3) [Enter = 1,3]: ");
+  });
+
+  it("an empty answer returns the preselected emails", async () => {
+    const result = await promptAuthors(candidates, { input: lineInput(""), output: sinkOutput() }, [
+      "a@example.com",
+      "c@example.com",
+    ]);
+    expect(result).toEqual(["a@example.com", "c@example.com"]);
+  });
+
+  it("a non-empty answer overrides the preselection", async () => {
+    const result = await promptAuthors(candidates, { input: lineInput("2"), output: sinkOutput() }, [
+      "a@example.com",
+      "c@example.com",
+    ]);
+    expect(result).toEqual(["b@example.com"]);
+  });
+
+  it("falls back to today's behavior when none of the preselected emails are present", async () => {
+    const out = captureOutput();
+    const result = await promptAuthors(candidates, { input: lineInput(""), output: out.stream }, [
+      "gone@example.com",
+    ]);
+    expect(out.text()).toContain("Enter the numbers, comma-separated (e.g. 1,3): ");
+    expect(result).toEqual([]);
+  });
+
+  it("falls back to today's behavior when preselectedEmails is absent", async () => {
+    const result = await promptAuthors(candidates, { input: lineInput(""), output: sinkOutput() });
+    expect(result).toEqual([]);
+  });
+});
+
+describe("promptUseSavedSelection — Y/n confirmation, Y default", () => {
+  it("prints exactly 'Use your saved identity selection: a@example.com, b@example.com? (Y/n) '", async () => {
+    const out = captureOutput();
+    await promptUseSavedSelection(["a@example.com", "b@example.com"], {
+      input: lineInput(""),
+      output: out.stream,
+    });
+    expect(out.text()).toBe("Use your saved identity selection: a@example.com, b@example.com? (Y/n) ");
+  });
+
+  it("accepts on Enter (empty answer), defaulting to yes", async () => {
+    const result = await promptUseSavedSelection(["a@example.com"], {
+      input: lineInput(""),
+      output: sinkOutput(),
+    });
+    expect(result).toBe(true);
+  });
+
+  it("declines on an explicit n", async () => {
+    const result = await promptUseSavedSelection(["a@example.com"], {
+      input: lineInput("n"),
+      output: sinkOutput(),
+    });
+    expect(result).toBe(false);
   });
 });

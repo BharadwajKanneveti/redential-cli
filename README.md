@@ -204,6 +204,7 @@ and what the provenance attestation actually proves.
 - [docs/privacy-tests.md](docs/privacy-tests.md) — which test proves which rule
 - [docs/scan.md](docs/scan.md) — full `scan` command reference
 - [docs/login-submit.md](docs/login-submit.md) — `login`, `submit`, `logout`
+- [docs/identity-selection-memory.md](docs/identity-selection-memory.md) — how `scan`/`submit` remember your per-repo identity selection
 - [docs/private-label.md](docs/private-label.md) — the mandatory private label: what it is, why it travels outside the bundle
 - [docs/schema.md](docs/schema.md) — every bundle field, explained
 - [docs/signatures.md](docs/signatures.md) — how skill detection works

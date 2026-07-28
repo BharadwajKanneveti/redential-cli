@@ -7,6 +7,18 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+### Added
+- `scan` and `submit` now remember the per-repo author-identity selection and
+  prefill it on the next run against the same repo — a repeat run confirms
+  with a single Enter instead of re-picking numbers, unless the repo's author
+  list has changed since the selection was stored, in which case the full
+  prompt is shown again with the previous selection pre-marked as the
+  default. Stored in a new `identity-selections.json`, same config directory
+  and `0600` permissions as `credentials.json`, keyed by the repo's salted
+  `repo_fingerprint` (never the repo path or name). `redential logout` does
+  not delete it — it isn't a credential. See
+  [docs/identity-selection-memory.md](docs/identity-selection-memory.md).
+
 ### Fixed
 - Map the `prisma` and `wrangler` packages to their existing taxonomy slugs, closing package detection gaps.
 - Fix the author identity prompt showing "1 commits" instead of "1 commit" when a single commit is found.

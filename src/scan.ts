@@ -35,6 +35,21 @@ export interface AuthorCandidate {
   count: number;
 }
 
+/**
+ * The bundle's own `repo.repo_fingerprint` — `saltedHash(salt, rootCommitSha)`
+ * — computed as a standalone helper so build-bundle.ts (identity-selection
+ * memory's storage key, see docs/identity-selection-memory.md) and runScan
+ * below can never drift apart on how it's derived. Pure and idempotent: the
+ * salt is read/created once per machine (salt.ts) and the root commit sha
+ * never changes for a given repo, so calling this more than once for the
+ * same (repoPath, configDir) always returns the same value.
+ */
+export function computeRepoFingerprint(repoPath: string, configDir?: string): string {
+  const salt = getOrCreateSalt(configDir);
+  const rootSha = getRootCommitSha(repoPath);
+  return saltedHash(salt, rootSha);
+}
+
 export async function listAuthors(repoPath: string): Promise<AuthorCandidate[]> {
   const counts = new Map<string, number>();
   for (const c of await getAllCommits(repoPath)) {
@@ -128,7 +143,7 @@ export async function runScan(opts: ScanOptions): Promise<Bundle> {
   const repoFirstCommitDate = getRootCommitDate(opts.repoPath, rootSha);
   const ageDays = Math.floor((now.getTime() - repoFirstCommitDate.getTime()) / MS_PER_DAY);
   const hostType = getRemoteHostType(opts.repoPath);
-  const repoFingerprint = saltedHash(salt, rootSha);
+  const repoFingerprint = computeRepoFingerprint(opts.repoPath, opts.configDir);
 
   const firstAt = userCommits[0].authorDate;
   const lastAt = userCommits[userCommits.length - 1].authorDate;
