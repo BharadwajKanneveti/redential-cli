@@ -451,6 +451,22 @@ describe("extractImportedPackages — package.json", () => {
     ).toEqual(["vitest"]);
   });
 
+  it("extracts dependencies even when scripts contain glob patterns", () => {
+    const diff = [
+      '"scripts": {',
+      '"clean": "rm -rf dist/*",',
+      '"lint": "eslint src/**/*.ts"',
+      "},",
+      '"dependencies": {',
+      '  "@prisma/client": "^6"',
+      "}",
+    ].join("\n");
+
+    expect(
+      extractImportedPackages(diff, "package.json")
+    ).toEqual(["@prisma/client"]);
+  });
+
   it("does not extract package names from scripts", () => {
     const diff = [
       '"scripts": {',
@@ -459,7 +475,7 @@ describe("extractImportedPackages — package.json", () => {
     ].join("\n");
 
     expect(
-      extractImportedPackages(diff, "package.json")
+          extractImportedPackages(diff, "package.json")
     ).toEqual([]);
   });
 });

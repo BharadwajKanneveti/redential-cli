@@ -172,7 +172,11 @@ function extractJsImports(text: string): string[] {
 
 const PACKAGE_JSON_DEPS_HEADER = /^"(dependencies|devDependencies|peerDependencies)"\s*:\s*\{$/;
 const PACKAGE_JSON_DEP_LINE = /^"([^"]+)"\s*:/;
-
+// package.json is parsed from added diff lines only. A dependency block
+// header (`dependencies`, `devDependencies`, or `peerDependencies`) must be
+// present in the added lines before scanning its contents; otherwise a
+// standalone `"package": "version"` entry cannot be safely attributed and is
+// treated as a documented miss rather than guessed evidence.
 function extractPackageJson(text: string): string[] {
   const found: string[] = [];
   let dependencyDepth = 0;
@@ -548,8 +552,9 @@ export function extractImportedPackages(addedLines: string, filePath: string): s
   const isComposerJson = language === "php" && /composer\.json$/i.test(filePath);
   const isCargoToml = language === "rust" && /cargo\.toml$/i.test(filePath);
   const isCsproj = language === "csharp" && /\.csproj$/i.test(filePath);
+  const isPackageJson = language === "js" && /package\.json$/i.test(filePath);
   const text =
-    isComposerJson || isCargoToml || isCsproj ? addedLines : stripNonCodeRegions(addedLines);
+    isComposerJson || isCargoToml || isCsproj || isPackageJson ? addedLines : stripNonCodeRegions(addedLines);
   switch (language) {
     case "js":
       return extractJs(text, filePath);
