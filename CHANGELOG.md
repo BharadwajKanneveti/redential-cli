@@ -30,6 +30,11 @@ always bump at least minor; breaking schema changes bump major.
 - Add `frontend/storybook` to the closed skill taxonomy for Storybook work.
 
 ### Changed
+- `submit` no longer repeats `scan`'s "Continue locally? (Y/n)" question for
+  a connectable-repo remote — it still prints the same warning, but the real
+  protection against a public repo on `submit` is its network visibility
+  gate at the end of the command, which is unchanged and still refuses
+  confirmed-public repos.
 - Principle 2 ("Explicit") amended per RFC #13: append-only local state
   (a future session-receipt vault) is explicitly permitted; resident
   processes, hooks, IDE plugins, and any auto-emit remain forbidden. The

@@ -16,6 +16,12 @@ import { startMockServer, type MockServer } from "./support/mock-server.js";
  * (prompt.ts's promptContinueLocally). Non-TTY/piped mode keeps the
  * pre-existing non-blocking behavior exactly: warn and continue, no
  * prompt, never a `null` bundle. See build-bundle.ts's own comments.
+ *
+ * `submit` opts out of this follow-up question entirely
+ * (`askContinueLocally: false`, see build-bundle.ts) — it still gets the
+ * warning line, but its real answer to a public remote is the network
+ * visibility gate at the end of submit.ts, which actually refuses
+ * confirmed-public repos. See this file's last `describe` block below.
  */
 
 const dirs: string[] = [];
@@ -197,9 +203,9 @@ describe("executeScanCommand — --json treats a connectable-repo TTY run as non
   });
 });
 
-describe("executeSubmitCommand — connectable-repo decline (TTY)", () => {
-  it("uploads nothing and prints nothing to stdout when the user declines", async () => {
-    const server = await startMockServer(() => ({ status: 200, body: { id: "should-not-be-called" } }));
+describe("executeSubmitCommand — connectable-repo notice (TTY)", () => {
+  it("submit never asks 'Continue locally?' — it still prints the warning, but its real guard is the visibility gate below, not this prompt", async () => {
+    const server = await startMockServer(() => ({ status: 200, body: { id: "b1" } }));
     servers.push(server);
     const originalSiteUrl = process.env.REDENTIAL_SITE_URL;
     process.env.REDENTIAL_SITE_URL = server.url;
@@ -208,27 +214,43 @@ describe("executeSubmitCommand — connectable-repo decline (TTY)", () => {
     const configDir = tempConfigDir();
     saveCredentials({ access_token: "t", site_url: server.url, obtained_at: "now" }, configDir);
 
-    const logs: string[] = [];
     const warnings: string[] = [];
+    let promptCalled = false;
+    let probeCalled = false;
     try {
+      // `probeFn` stubs the gate's network probe to return 404 (not
+      // publicly reachable), which lets the run flow through the gate
+      // unblocked and on to the upload — the gate's own blocked/unblocked
+      // outcomes are covered separately in test/submit.test.ts; this test
+      // only cares that the gate (not the removed prompt) is what's run.
       await executeSubmitCommand({
         repoPath: dir,
         author: ["you@example.com"],
         yes: true,
         confirmUpload: true,
+        label: "acme-backend",
         toolVersion: "0.1.0",
         configDir,
-        log: (m) => logs.push(m),
+        log: () => {},
         warn: (m) => warnings.push(m),
         isTTY: true,
-        promptContinueLocallyFn: async () => false,
+        promptContinueLocallyFn: async () => {
+          promptCalled = true;
+          return false;
+        },
+        probeFn: async () => {
+          probeCalled = true;
+          return { status: 404 };
+        },
+        checkForUpdateFn: async () => {},
       });
     } finally {
       process.env.REDENTIAL_SITE_URL = originalSiteUrl;
     }
 
-    expect(logs).toHaveLength(0);
-    expect(server.requests.filter((r) => r.url === "/api/cli/bundles")).toHaveLength(0);
-    expect(warnings.some((w) => w.includes("GitHub App"))).toBe(true);
+    expect(promptCalled).toBe(false);
+    expect(probeCalled).toBe(true);
+    expect(warnings.some((w) => w.includes("This repo appears connectable through GitHub."))).toBe(true);
+    expect(server.requests.some((r) => r.url === "/api/cli/bundles")).toBe(true);
   });
 });

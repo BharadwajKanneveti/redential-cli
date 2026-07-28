@@ -53,6 +53,16 @@ export interface BuildBundleOptions {
   // public-remote.ts's publicHostWarning) — never in piped/non-TTY mode,
   // which keeps today's non-blocking "warn and continue" behavior exactly.
   promptContinueLocallyFn?: () => Promise<boolean>;
+  // Whether the connectable-repo notice's "Continue locally?" follow-up
+  // question is asked at all, when `isTTY` is true and the note fired.
+  // Undefined behaves like `true` (today's exact scan behavior). `submit`
+  // passes `false`: its real answer to a public remote is the network
+  // visibility gate at the end of submit.ts, which actually refuses
+  // confirmed-public repos — asking this question too was redundant with
+  // scan's own prompt. The `publicHostWarning` line is still printed via
+  // `warn` either way; only the interactive question is skipped, so the
+  // `null`-return path below is unreachable when this is `false`.
+  askContinueLocally?: boolean;
   // Raw --since spec, forwarded to runScan (src/since.ts parses it). See
   // scan-command.ts / docs/scan.md for the CLI-facing behavior.
   since?: string;
@@ -84,7 +94,7 @@ export async function buildBundleInteractively(opts: BuildBundleOptions): Promis
     // public-remote.ts's own comment on why this question lives outside
     // publicHostWarning's returned string. Piped/non-TTY stdout keeps
     // today's exact behavior: warn and continue, never blocking.
-    if (opts.isTTY) {
+    if (opts.isTTY && opts.askContinueLocally !== false) {
       const proceed = await (opts.promptContinueLocallyFn ?? promptContinueLocally)();
       if (!proceed) {
         warn("Nothing scanned. Connect the GitHub App instead for a stronger tier.");

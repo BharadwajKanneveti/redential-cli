@@ -139,10 +139,15 @@ export async function executeSubmitCommand(opts: SubmitCommandOptions): Promise<
     throw new AuthError("Stored session belongs to a different site. Run `redential login` again.");
   }
 
-  const bundle = await buildBundleInteractively(opts);
-  // `null` only happens when a real TTY user declined the connectable-repo
-  // "Continue locally?" follow-up (see build-bundle.ts) — it already
-  // printed the "nothing scanned" notice; nothing was uploaded either.
+  // `askContinueLocally: false` — submit's real answer to a public remote is
+  // the network visibility gate below, which actually refuses
+  // confirmed-public repos; asking "Continue locally?" here too was
+  // redundant with scan's own prompt (see build-bundle.ts's own comment on
+  // this option). The `publicHostWarning` line above it is still printed.
+  const bundle = await buildBundleInteractively({ ...opts, askContinueLocally: false });
+  // `null` is unreachable here (see `askContinueLocally: false` above) —
+  // kept only because `buildBundleInteractively`'s return type still
+  // includes it for `scan`'s own path (see build-bundle.ts).
   if (bundle === null) return;
   const bundleJson = JSON.stringify(bundle, null, 2);
 
