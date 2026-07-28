@@ -7,6 +7,8 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-28
+
 ### Added
 - `scan` and `submit` now remember the per-repo author-identity selection and
   prefill it on the next run against the same repo — a repeat run confirms
@@ -18,16 +20,14 @@ always bump at least minor; breaking schema changes bump major.
   `repo_fingerprint` (never the repo path or name). `redential logout` does
   not delete it — it isn't a credential. See
   [docs/identity-selection-memory.md](docs/identity-selection-memory.md).
+- Add `validation/zod` to the closed skill taxonomy for Zod work.
+- Add `frontend/storybook` to the closed skill taxonomy for Storybook work.
 
 ### Fixed
 - Map the `prisma` and `wrangler` packages to their existing taxonomy slugs, closing package detection gaps.
 - Fix the author identity prompt showing "1 commits" instead of "1 commit" when a single commit is found.
 - Improved non-interactive prompt errors by adding actionable guidance to use `--author <email>` and `--yes` when author identity selection or authorization confirmation cannot be completed because input is unavailable.
 - Improved non-interactive submit prompt errors by adding actionable guidance to use `--confirm-upload` and `--label` when upload confirmation or private label input cannot be completed because input is unavailable.
-
-### Added
-- Add `validation/zod` to the closed skill taxonomy for Zod work.
-- Add `frontend/storybook` to the closed skill taxonomy for Storybook work.
 
 ### Changed
 - `submit` no longer repeats `scan`'s "Continue locally? (Y/n)" question for
