@@ -14,16 +14,25 @@ in `taxonomy.json`.
 
 For most technology, "this commit imported package X" is already enough to
 say "this commit used X." `src/import-detect.ts` parses added lines for
-import statements across ten language families (JS/TS `import`/`require`/
-dynamic `import()`, Python `import`/`from`, Go `import` including blocks,
-Ruby `require`/Gemfile `gem`, PHP `composer.json`'s `require` and, more
-loosely, `use` namespace statements — see "PHP scope" below; Rust `use`/
-Cargo.toml, Java `import`, Kotlin `import`, C# `using`/.csproj, Swift
-`import`/Package.swift — see "Rust, JVM, and C# scope" and "Swift scope"
-below), normalizes each to a package name (`stripe/webhooks` → `stripe`,
-`@org/pkg/sub` → `@org/pkg`, a Go path's trailing `/v9` stripped, …), and
-looks it up in `signatures/package-map.json` — a flat
+import statements and dependency manifests across ten language families
+(JS/TS `import`/`require`/dynamic `import()` and `package.json`
+`dependencies`/`devDependencies`/`peerDependencies` blocks, Python
+`import`/`from`, Go `import` including blocks, Ruby `require`/Gemfile
+`gem`, PHP `composer.json`'s `require` and, more loosely, `use`
+namespace statements — see "PHP scope" below; Rust `use`/Cargo.toml,
+Java `import`, Kotlin `import`, C# `using`/.csproj, Swift
+`import`/`Package.swift` — see "Rust, JVM, and C# scope" and "Swift
+scope" below), normalizes each to a package name (`stripe/webhooks` →
+`stripe`, `@org/pkg/sub` → `@org/pkg`, a Go path's trailing `/v9`
+stripped, …), and looks it up in `signatures/package-map.json` — a flat
 `{"package-name": "taxonomy-slug"}` map, 600+ entries.
+
+`package.json` dependency detection is intentionally conservative:
+dependency entries are only attributed when the relevant dependency block
+header (`dependencies`, `devDependencies`, or `peerDependencies`) is
+present in the added diff lines. Without that context, a standalone
+`"package": "version"` entry cannot be safely attributed and is treated
+as a documented miss rather than guessed evidence.
 
 Deliberately regex-based, not a real parser per language (a dependency per
 language is a supply-chain surface CLAUDE.md's policy doesn't allow without

@@ -34,6 +34,7 @@ function languageForPath(filePath: string): ImportLanguage | null {
   if (ext === ".go") return "go";
   if (ext === ".rb" || lower.endsWith("/gemfile") || lower === "gemfile") return "ruby";
   if (ext === ".php" || lower.endsWith("/composer.json") || lower === "composer.json") return "php";
+  if (lower.endsWith("/package.json") || lower === "package.json") return "js";
   if (ext === ".rs" || lower.endsWith("/cargo.toml") || lower === "cargo.toml") return "rust";
   if (ext === ".java") return "java";
   if (ext === ".kt" || ext === ".kts") return "kotlin";
@@ -126,7 +127,7 @@ function normalizeJs(raw: string): string {
   return raw.split("/")[0];
 }
 
-function extractJs(text: string): string[] {
+function extractJsImports(text: string): string[] {
   const found: string[] = [];
   // import ... from "pkg" / export ... from "pkg" (also covers `export * from`,
   // `export { x } from`, and multi-line named-import lists via [\s\S]*?).
@@ -167,6 +168,55 @@ function extractJs(text: string): string[] {
     found.push(normalizeJs(m[1]));
   }
   return found;
+}
+
+const PACKAGE_JSON_DEPS_HEADER = /^"(dependencies|devDependencies|peerDependencies)"\s*:\s*\{$/;
+const PACKAGE_JSON_DEP_LINE = /^"([^"]+)"\s*:/;
+// package.json is parsed from added diff lines only. A dependency block
+// header (`dependencies`, `devDependencies`, or `peerDependencies`) must be
+// present in the added lines before scanning its contents; otherwise a
+// standalone `"package": "version"` entry cannot be safely attributed and is
+// treated as a documented miss rather than guessed evidence.
+function extractPackageJson(text: string): string[] {
+  const found: string[] = [];
+  let dependencyDepth = 0;
+  let scanningDependencies = false;
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (isCommentLine(rawLine)) continue;
+    const line = rawLine.trim();
+    if (PACKAGE_JSON_DEPS_HEADER.test(line)) {
+      scanningDependencies = true;
+      dependencyDepth = 1;
+      continue;
+    }
+
+    if (!scanningDependencies) continue;
+
+    if (line.includes("{")) {
+      dependencyDepth++;
+    }
+    if (line.includes("}")) {
+      dependencyDepth--;
+
+      if (dependencyDepth === 0) {
+        scanningDependencies = false;
+      }
+      continue;
+    }
+    const dep = PACKAGE_JSON_DEP_LINE.exec(line);
+    if (dep) {
+      found.push(dep[1]);
+    }
+  }
+
+  return found;
+}
+function extractJs(text: string, filePath: string): string[] {
+    return /package\.json$/i.test(filePath)
+    ? extractPackageJson(text)
+    : extractJsImports(text);
 }
 
 function extractPython(text: string): string[] {
@@ -502,11 +552,12 @@ export function extractImportedPackages(addedLines: string, filePath: string): s
   const isComposerJson = language === "php" && /composer\.json$/i.test(filePath);
   const isCargoToml = language === "rust" && /cargo\.toml$/i.test(filePath);
   const isCsproj = language === "csharp" && /\.csproj$/i.test(filePath);
+  const isPackageJson = language === "js" && /package\.json$/i.test(filePath);
   const text =
-    isComposerJson || isCargoToml || isCsproj ? addedLines : stripNonCodeRegions(addedLines);
+    isComposerJson || isCargoToml || isCsproj || isPackageJson ? addedLines : stripNonCodeRegions(addedLines);
   switch (language) {
     case "js":
-      return extractJs(text);
+      return extractJs(text, filePath);
     case "python":
       return extractPython(text);
     case "go":
