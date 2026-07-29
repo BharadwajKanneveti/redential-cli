@@ -7,6 +7,12 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+### Added
+- Map the `zod` npm import to `validation/zod` (Tier 1).
+- Add Tier 2 signature for Storybook (`frontend/storybook`): detects
+  `.storybook/main.*` and `.storybook/preview.*` config files,
+  `*.stories.*` story files, and `@storybook/*` scoped imports.
+
 ### Changed
 - Show a tip in the TTY summary when no commits are cryptographically signed, with guidance for enabling commit signing.
 

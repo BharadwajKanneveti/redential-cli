@@ -1,0 +1,41 @@
+{
+  "slug": "frontend/storybook",
+  "importPatterns": [
+    "from\\s+[\"']@storybook/"
+  ],
+  "apiPatterns": [],
+  "configFilePatterns": [
+    "(^|/)\\.storybook/(main|preview)\\.(js|jsx|ts|tsx|cjs|mjs|mts|cts)$",
+    "\\.stories\\.(js|jsx|ts|tsx|mdx)$"
+  ],
+  "fixtures": {
+    "positive": [
+      {
+        "path": ".storybook/main.ts",
+        "diff": "import type { StorybookConfig } from '@storybook/react-vite';\nconst config: StorybookConfig = { addons: [\"@storybook/addon-docs\"] };\nexport default config;"
+      },
+      {
+        "path": ".storybook/preview.tsx",
+        "diff": "import type { Preview } from '@storybook/react-vite';\nimport { ThemeProvider } from '../src/theme/ThemeProvider';\nconst preview: Preview = { parameters: {} };\nexport default preview;"
+      },
+      {
+        "path": "src/components/ui/Button.stories.tsx",
+        "diff": "import type { Meta, StoryObj } from '@storybook/react';\nimport { Button } from './Button';\nconst meta: Meta<typeof Button> = { title: 'UI Components/Button' };\nexport default meta;"
+      },
+      {
+        "path": ".storybook/main.mts",
+        "diff": "import type { StorybookConfig } from '@storybook/react-vite';\nconst config: StorybookConfig = { addons: [\"@storybook/addon-docs\"] };\nexport default config;"
+      },
+      {
+        "path": "src/components/ui/Button.stories.mdx",
+        "diff": "import { Meta, Story } from '@storybook/blocks';\nimport { Button } from './Button';\n\n<Meta title=\"UI Components/Button\" component={Button} />"
+      }
+    ],
+    "negative": [
+      {
+        "path": "README.md",
+        "diff": "We considered Storybook for our component library but decided to document components inline instead."
+      }
+    ]
+  }
+}
