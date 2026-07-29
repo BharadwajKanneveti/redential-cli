@@ -7,7 +7,11 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+### Changed
+- Show a tip in the TTY summary when no commits are cryptographically signed, with guidance for enabling commit signing.
+
 ## [0.7.0] - 2026-07-28
+
 ### Added
 - `scan` and `submit` now remember the per-repo author-identity selection and
   prefill it on the next run against the same repo — a repeat run confirms
@@ -29,8 +33,6 @@ always bump at least minor; breaking schema changes bump major.
 - Improved non-interactive submit prompt errors by adding actionable guidance to use `--confirm-upload` and `--label` when upload confirmation or private label input cannot be completed because input is unavailable.
 
 ### Changed
-- Show a tip in the TTY summary when no commits are cryptographically 
-  signed, with guidance for enabling commit signing.
 - `submit` no longer repeats `scan`'s "Continue locally? (Y/n)" question for
   a connectable-repo remote — it still prints the same warning, but the real
   protection against a public repo on `submit` is its network visibility
