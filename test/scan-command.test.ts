@@ -378,9 +378,7 @@ describe("executeScanCommand", () => {
       isTTY: true,
     });
 
-    expect(logs[0]).toContain(
-      "Tip: signing future commits adds a stronger identity anchor to your attestation."
-    );
+    expect(logs[0]).toContain("Tip: none of your commits are signed.");
   });
 
   it("omits the signing tip when at least one commit is signed", async () => {

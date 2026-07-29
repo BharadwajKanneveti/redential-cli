@@ -7,8 +7,10 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-07-28
+### Fixed
+- Show a one-time tip in the TTY summary when no commits are cryptographically signed, with guidance for enabling commit signing.
 
+## [0.7.0] - 2026-07-28
 ### Added
 - `scan` and `submit` now remember the per-repo author-identity selection and
   prefill it on the next run against the same repo — a repeat run confirms
