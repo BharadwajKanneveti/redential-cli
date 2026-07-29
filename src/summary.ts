@@ -538,7 +538,7 @@ export function formatSummary(bundle: Bundle, opts: FormatSummaryOptions = {}): 
   );
   if (bundle.signed.ratio === 0) {
     lines.push(
-      `  ${colors.DIM}Tip: signing future commits adds a stronger identity anchor to your attestation.${colors.RESET}`
+      `  ${colors.DIM}Tip: none of your commits are signed. Signed commits make your future work cryptographically attributable: https://docs.github.com/en/authentication/managing-commit-signature-verification${colors.RESET}`
     );
   }
   lines.push("");

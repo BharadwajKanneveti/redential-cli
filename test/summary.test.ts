@@ -84,12 +84,12 @@ describe("formatSummary", () => {
 
   it("shows the signing tip when signed ratio is 0%", () => {
     const text = stripAnsi(formatSummary(baseBundle({ signed: { count: 0, ratio: 0 } })));
-    expect(text).toContain("Tip: signing future commits adds a stronger identity anchor to your attestation.");
+    expect(text).toContain("Tip: none of your commits are signed.");
   });
 
   it("omits the signing tip when signed ratio is above 0%", () => {
-    const text = stripAnsi(formatSummary(baseBundle()));
-    expect(text).not.toContain("Tip: signing future commits");
+    const text = stripAnsi(formatSummary(baseBundle({ signed: { count: 1, ratio: 0.5 } })));
+    expect(text).not.toContain("Tip: none of your commits are signed.");
   });
 
   it("omits the COMMITS BY HOUR/WEEKDAY histogram sections by default (moved behind --details in phase 2)", () => {
