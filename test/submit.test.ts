@@ -130,7 +130,14 @@ function repoWithOneCommit(remote?: string): string {
   return dir;
 }
 
-describe("executeSubmitCommand", () => {
+// Every test below builds a real git repo (multiple `git` process spawns)
+// and, in most cases, also starts a mock HTTP server — comfortably under
+// vitest's default 5s budget locally, but not on loaded CI runners (seen
+// timing out on windows-latest/Node 22). 30s matches the budget the repo's
+// own huge-repo perf test (test/slow/huge-repo.test.ts) already allows for
+// much heavier work, applied here at the `describe` level so it covers
+// every test in these blocks without a per-test annotation on each one.
+describe("executeSubmitCommand", { timeout: 30_000 }, () => {
   it("refuses when there is no stored session, with a friendly message pointing at `redential login` — not a raw/dry error", async () => {
     const dir = repoWithOneCommit();
     const configDir = tempConfigDir();
@@ -414,7 +421,7 @@ describe("executeSubmitCommand", () => {
   });
 });
 
-describe("executeSubmitCommand — consent summary", () => {
+describe("executeSubmitCommand — consent summary", { timeout: 30_000 }, () => {
   // Console-UX milestone (2026-07): TTY order is now short summary line,
   // identity-corroboration line (absent here — no verified-emails endpoint
   // configured on this mock server, so fetchVerifiedEmails fails open and
@@ -551,7 +558,7 @@ describe("executeSubmitCommand — consent summary", () => {
   });
 });
 
-describe("identity corroboration", () => {
+describe("identity corroboration", { timeout: 30_000 }, () => {
   it("full match: header carries {corroborated_count, total_claimed} equal, and the notice is printed", async () => {
     const server = await startMockServer((req) => {
       if (req.url === "/api/cli/identity/emails") return { status: 200, body: { emails: ["you@example.com"] } };
@@ -758,7 +765,7 @@ function labelRequests(server: MockServer): RecordedRequest[] {
   return server.requests.filter((r) => r.url === "/api/cli/private-label");
 }
 
-describe("executeSubmitCommand — private label", () => {
+describe("executeSubmitCommand — private label", { timeout: 30_000 }, () => {
   it("sends exactly two requests: the bundle POST (byte-identical to the printed JSON, guardrail untouched) and the private-label POST matching the fixed contract", async () => {
     const server = await startMockServer((req) => {
       if (req.url === "/api/cli/bundles") return { status: 200, body: { id: "bundle-label-ok" } };
