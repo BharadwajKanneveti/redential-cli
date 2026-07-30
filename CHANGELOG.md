@@ -15,6 +15,7 @@ always bump at least minor; breaking schema changes bump major.
 
 ### Changed
 - Show a tip in the TTY summary when no commits are cryptographically signed, with guidance for enabling commit signing.
+- Document the global install conflict between `redential` and `@redential/cli`, with guidance for updating or switching between them.
 
 ## [0.7.0] - 2026-07-28
 

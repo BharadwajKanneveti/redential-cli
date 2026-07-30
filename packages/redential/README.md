@@ -10,6 +10,18 @@ The real package, source code, and provenance all live at
 — this package is just a launcher that depends on it and forwards every
 command.
 
+**Already have `@redential/cli` installed globally?**
+
+`redential` and `@redential/cli` both install the same `redential`
+executable and cannot be installed globally at the same time. Either
+update the scoped package:
+
+```bash
+npm install -g @redential/cli@latest
+```
+
+or uninstall it before installing `redential`.
+
 ```bash
 npx redential scan
 ```
