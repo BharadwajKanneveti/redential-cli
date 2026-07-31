@@ -44,6 +44,26 @@ import {
   fixturePaypalOtherAuthor,
   fixturePaypalUnused,
   fixtureStripeUnused,
+  fixtureAuthSessionDirect,
+  fixtureAuthSessionLayered,
+  fixtureAuthSessionUnused,
+  fixtureAuthSessionOtherAuthor,
+  fixtureAuthOauthDirect,
+  fixtureAuthOauthLayered,
+  fixtureAuthOauthUnused,
+  fixtureAuthOauthOtherAuthor,
+  fixtureAuthJwtRefreshDirect,
+  fixtureAuthJwtRefreshWithInvalidation,
+  fixtureAuthJwtRefreshNoRotation,
+  fixtureAuthJwtRefreshLayered,
+  fixtureAuthJwtRefreshUnused,
+  fixtureAuthJwtRefreshOtherAuthor,
+  fixtureAuthJwtDecodeOnly,
+  fixtureAuthLoginFormOnly,
+  fixtureAuthGuardWithoutAuthLibrary,
+  fixtureAuthMixedLibraries,
+  fixtureAuthScopedFlowWithOverlappingLibrary,
+  fixtureAuthAliasedImport,
 } from "./fixtures.js";
 
 const adapter = new TscParserAdapter();
@@ -534,5 +554,356 @@ describe("proof-graph H6 phase 2b — RevenueCat/IAP (payments/iap-subscription-
     expect(finding.confidence).toBe("direct");
     expect(finding.attributed).toBe(false);
     expect(finding.claimed).toBe(false);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Auth flows (issue #5)
+// -----------------------------------------------------------------------
+
+const SESSION_SLUG = "auth/session-flow";
+const OAUTH_SLUG = "auth/oauth-flow";
+const JWT_REFRESH_SLUG = "auth/jwt-refresh-flow";
+
+const findBySlug = (findings: { slug: string }[], slug: string) => findings.find((f) => f.slug === slug);
+
+describe("auth/session-flow end-to-end fixtures (issue #5)", () => {
+  it("credential-verification + session-issuance + route-guard in one function -> DIRECT (same-function), claimed", async () => {
+    const dir = fixtureAuthSessionDirect();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, SESSION_SLUG);
+    expect(finding).toBeDefined();
+    expect(finding!.confidence).toBe("direct");
+    expect(finding!.attributed).toBe(true);
+    expect(finding!.claimed).toBe(true);
+    expect(finding!.connection).toEqual({ kind: "same-function", edgeDistance: 0 });
+  });
+
+  it("three files connected by relative imports (handler -> issue -> guard) -> INFERRED, claimed", async () => {
+    const dir = fixtureAuthSessionLayered();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, SESSION_SLUG);
+    expect(finding).toBeDefined();
+    expect(finding!.confidence).toBe("inferred");
+    expect(finding!.claimed).toBe(true);
+    expect(finding!.connection!.kind).toBe("cross-file");
+    expect(finding!.connection!.edgeDistance).toBeLessThanOrEqual(3);
+    expect(new Set(finding!.anchors.map((a) => a.path)).size).toBeGreaterThanOrEqual(2);
+  });
+
+  it("supabase imported but no auth call wired -> AMBIGUOUS, never claimed, and carries no other pattern's anchors", async () => {
+    const dir = fixtureAuthSessionUnused();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, SESSION_SLUG);
+    expect(finding).toBeDefined();
+    expect(finding!.confidence).toBe("ambiguous");
+    expect(finding!.claimed).toBe(false);
+    // The ownAnchors guarantee: the co-located Stripe pattern's anchors must
+    // never leak into this finding, even though both live in one repo.
+    expect(finding!.anchors.every((a) => !a.path.includes("stripe"))).toBe(true);
+    // ...while the unrelated Stripe pattern still classifies on its own.
+    expect(findBySlug(findings, "payments/payment-webhook-flow")!.confidence).toBe("direct");
+  });
+
+  it("pattern committed by a different author -> DIRECT overall, unattributed and unclaimed", async () => {
+    const dir = fixtureAuthSessionOtherAuthor();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, SESSION_SLUG);
+    expect(finding!.confidence).toBe("direct");
+    expect(finding!.attributed).toBe(false);
+    expect(finding!.claimed).toBe(false);
+  });
+});
+
+describe("auth/oauth-flow end-to-end fixtures (issue #5)", () => {
+  it("authorize-redirect + code-exchange + session-issuance in one function -> DIRECT (same-function), claimed", async () => {
+    const dir = fixtureAuthOauthDirect();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, OAUTH_SLUG);
+    expect(finding).toBeDefined();
+    expect(finding!.confidence).toBe("direct");
+    expect(finding!.claimed).toBe(true);
+    expect(finding!.connection).toEqual({ kind: "same-function", edgeDistance: 0 });
+  });
+
+  it("three files connected by relative imports (login -> callback -> session) -> INFERRED, claimed", async () => {
+    const dir = fixtureAuthOauthLayered();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, OAUTH_SLUG);
+    expect(finding!.confidence).toBe("inferred");
+    expect(finding!.claimed).toBe(true);
+    expect(finding!.connection!.kind).toBe("cross-file");
+  });
+
+  it("a login BUTTON with no authorize/exchange/session call -> AMBIGUOUS, never claimed", async () => {
+    const dir = fixtureAuthOauthUnused();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, OAUTH_SLUG);
+    expect(finding!.confidence).toBe("ambiguous");
+    expect(finding!.claimed).toBe(false);
+  });
+
+  it("pattern committed by a different author -> DIRECT overall, unattributed and unclaimed", async () => {
+    const dir = fixtureAuthOauthOtherAuthor();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, OAUTH_SLUG);
+    expect(finding!.confidence).toBe("direct");
+    expect(finding!.attributed).toBe(false);
+    expect(finding!.claimed).toBe(false);
+  });
+});
+
+describe("auth/jwt-refresh-flow end-to-end fixtures (issue #5)", () => {
+  it("verify + rotate + guard, no invalidation -> full triad found but capped at 'inferred', claimed", async () => {
+    const dir = fixtureAuthJwtRefreshDirect();
+    dirs.push(dir);
+
+    const { anchors, findings } = await runPipeline(dir, USER.email);
+
+    expect(anchors.some((a) => a.kind === "refresh-rotation")).toBe(true);
+    expect(anchors.some((a) => a.kind === "refresh-invalidation")).toBe(false);
+    const finding = findBySlug(findings, JWT_REFRESH_SLUG);
+    expect(finding!.confidence).toBe("inferred");
+    expect(finding!.claimed).toBe(true);
+    // The cap touches confidence ONLY — the real topology is still reported.
+    expect(finding!.connection).toEqual({ kind: "same-function", edgeDistance: 0 });
+  });
+
+  it("verify + rotate + guard + invalidation of the old token -> cap lifts, DIRECT, claimed", async () => {
+    const dir = fixtureAuthJwtRefreshWithInvalidation();
+    dirs.push(dir);
+
+    const { anchors, findings } = await runPipeline(dir, USER.email);
+
+    expect(anchors.some((a) => a.kind === "refresh-invalidation")).toBe(true);
+    const finding = findBySlug(findings, JWT_REFRESH_SLUG);
+    expect(finding!.confidence).toBe("direct");
+    expect(finding!.claimed).toBe(true);
+  });
+
+  it("cross-file (verify+rotate) vs guard -> INFERRED, claimed (also capped, same value)", async () => {
+    const dir = fixtureAuthJwtRefreshLayered();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, JWT_REFRESH_SLUG);
+    expect(finding!.confidence).toBe("inferred");
+    expect(finding!.connection!.kind).toBe("cross-file");
+  });
+
+  it("jsonwebtoken imported but never called -> AMBIGUOUS, never claimed", async () => {
+    const dir = fixtureAuthJwtRefreshUnused();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, JWT_REFRESH_SLUG);
+    expect(finding!.confidence).toBe("ambiguous");
+    expect(finding!.claimed).toBe(false);
+  });
+
+  it("pattern committed by a different author -> unattributed and unclaimed", async () => {
+    const dir = fixtureAuthJwtRefreshOtherAuthor();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    const finding = findBySlug(findings, JWT_REFRESH_SLUG);
+    expect(finding!.attributed).toBe(false);
+    expect(finding!.claimed).toBe(false);
+  });
+
+  // ---------------------------------------------------------------------
+  // REGRESSION GUARDS for the over-claim an earlier draft of this milestone
+  // shipped. That draft read issue #5 as making refresh-rotation the OPTIONAL
+  // member of this triad, by analogy with Mercado Pago's idempotency-guard.
+  // The analogy does not hold: an idempotency guard STRENGTHENS a payment
+  // webhook flow, whereas rotation IS the refresh flow. With rotation
+  // optional, the pattern classified from token-verification +
+  // guard-response alone — so "verify a token, deny with 401", one of the
+  // most common shapes in any web codebase, produced a CLAIMED
+  // jwt-refresh-flow finding on code that refreshes nothing.
+  //
+  // Both tests below assert that shape now yields NO claim.
+  // ---------------------------------------------------------------------
+
+  it("verification + guard with NO rotation anywhere -> cannot classify, ambiguous, never claimed", async () => {
+    const dir = fixtureAuthJwtRefreshNoRotation();
+    dirs.push(dir);
+
+    const { anchors, findings } = await runPipeline(dir, USER.email);
+
+    expect(anchors.some((a) => a.kind === "refresh-rotation")).toBe(false);
+    const finding = findBySlug(findings, JWT_REFRESH_SLUG);
+    expect(finding!.confidence).toBe("ambiguous");
+    expect(finding!.claimed).toBe(false);
+  });
+
+  it("a plain Supabase password login does NOT claim auth/jwt-refresh-flow", async () => {
+    const dir = fixtureAuthSessionDirect();
+    dirs.push(dir);
+
+    const { anchors, findings } = await runPipeline(dir, USER.email);
+
+    // getUser() is a real token-verification anchor and res.status(401) a
+    // real guard-response anchor — both genuinely present, both in one
+    // function. What is absent is any rotation at all.
+    expect(anchors.some((a) => a.kind === "token-verification")).toBe(true);
+    expect(anchors.some((a) => a.kind === "guard-response")).toBe(true);
+    expect(anchors.some((a) => a.kind === "refresh-rotation")).toBe(false);
+
+    // So the pattern must not claim. (It still surfaces as ambiguous, on
+    // package presence — ambiguous never claims, which is the whole point.)
+    const finding = findBySlug(findings, JWT_REFRESH_SLUG);
+    expect(finding!.claimed).toBe(false);
+
+    // ...while the session flow this code actually IS still claims correctly.
+    expect(findBySlug(findings, SESSION_SLUG)!.claimed).toBe(true);
+  });
+});
+
+describe("auth flows — negative fixtures (#28 discipline, issue #5)", () => {
+  it("jwt.decode only -> NO token-verification anchor, and no claimed finding", async () => {
+    const dir = fixtureAuthJwtDecodeOnly();
+    dirs.push(dir);
+
+    const { anchors, findings } = await runPipeline(dir, USER.email);
+
+    // The honesty rule, asserted directly: decode is not verification.
+    expect(anchors.some((a) => a.kind === "token-verification")).toBe(false);
+    expect(anchors.some((a) => a.kind === "credential-verification")).toBe(false);
+    // See fixtureAuthJwtDecodeOnly's own comment on why this is "no CLAIMED
+    // finding" rather than the issue's literal "zero findings".
+    expect(findings.every((f) => !f.claimed)).toBe(true);
+  });
+
+  it("a rendered login form with no auth import -> no auth finding at all", async () => {
+    const dir = fixtureAuthLoginFormOnly();
+    dirs.push(dir);
+
+    const { findings } = await runPipeline(dir, USER.email);
+
+    expect(findBySlug(findings, SESSION_SLUG)).toBeUndefined();
+    expect(findBySlug(findings, OAUTH_SLUG)).toBeUndefined();
+    expect(findBySlug(findings, JWT_REFRESH_SLUG)).toBeUndefined();
+  });
+
+  // -----------------------------------------------------------------------
+  // REGRESSION GUARD for jpbelmo's review question on PR #54: can an auth
+  // triad be satisfied ACROSS libraries, claiming a flow no single library
+  // completes? It could. This fixture reproduced it end-to-end — both
+  // auth/oauth-flow and auth/session-flow claimed — before same-library
+  // scoping landed in inferStructuralSkills.
+  //
+  // Worth recording why "cap it at inferred" was NOT the fix: buildFinding
+  // sets `claimed = confidence !== "ambiguous" && attributed`, so an
+  // inferred finding still claims. Lowering confidence would have relabelled
+  // the false claim, not removed it.
+  // -----------------------------------------------------------------------
+  it("three unrelated auth libraries do NOT combine into a claimed flow", async () => {
+    const dir = fixtureAuthMixedLibraries();
+    dirs.push(dir);
+
+    const { anchors, findings } = await runPipeline(dir, USER.email);
+
+    // Each library contributes only its own part, and the reason strings are
+    // the only place library identity survives at all.
+    const reasons = anchors.map((a) => a.reason).join("\n");
+    expect(reasons).toContain("NextAuth/Auth.js");
+    expect(reasons).toContain("Supabase Auth");
+    expect(reasons).toContain("plain JWT");
+
+    // No single library completes either triad (see the fixture's own
+    // comment for the per-library breakdown), so neither may claim.
+    expect(findBySlug(findings, OAUTH_SLUG)!.claimed).toBe(false);
+    expect(findBySlug(findings, SESSION_SLUG)!.claimed).toBe(false);
+
+    // Anchors are still FOUND — this is a classification fix, not a
+    // recognition one. Each library's own contribution is present and
+    // correctly attributed to it; they simply no longer combine.
+    const byLibrary = (id: string) => anchors.filter((a) => a.libraryId === id);
+    expect(byLibrary("NextAuth/Auth.js").length).toBeGreaterThan(0);
+    expect(byLibrary("Supabase Auth").length).toBeGreaterThan(0);
+
+    // Guard anchors carry no library and stay shared across scopes, so a
+    // real single-library flow can still find its own guard.
+    expect(anchors.some((a) => a.kind === "guard-response" && a.libraryId === undefined)).toBe(true);
+  });
+
+  it("a real single-library flow STILL claims when a second, partial library shares the repo", async () => {
+    const dir = fixtureAuthScopedFlowWithOverlappingLibrary();
+    dirs.push(dir);
+
+    const { anchors, findings } = await runPipeline(dir, USER.email);
+
+    // Both libraries are present, so scoping is engaged (not a no-op path).
+    expect(anchors.some((a) => a.libraryId === "Supabase Auth")).toBe(true);
+    expect(anchors.some((a) => a.libraryId === "NextAuth/Auth.js")).toBe(true);
+
+    // Supabase covers all three of session-flow's kinds (route-guard via the
+    // library-agnostic anchor); NextAuth covers two. coverage() must pick
+    // Supabase, and the flow must still claim at full strength.
+    const session = findBySlug(findings, SESSION_SLUG);
+    expect(session!.confidence).toBe("direct");
+    expect(session!.claimed).toBe(true);
+    expect(session!.connection).toEqual({ kind: "same-function", edgeDistance: 0 });
+
+    // ...and every supporting anchor is Supabase's or library-agnostic —
+    // NextAuth's partial contribution never leaks into the claim.
+    expect(session!.anchors.every((a) => a.libraryId === undefined || a.libraryId === "Supabase Auth")).toBe(true);
+  });
+
+  it("an ALIASED named import still matches on the exported name", async () => {
+    const dir = fixtureAuthAliasedImport();
+    dirs.push(dir);
+
+    const { anchors } = await runPipeline(dir, USER.email);
+
+    // `import { signIn as login }` — the local name appears in no
+    // descriptor, so this only fires if the exported name is preferred.
+    const nextAuth = anchors.filter((a) => a.libraryId === "NextAuth/Auth.js");
+    expect(nextAuth.length).toBeGreaterThan(0);
+    expect(nextAuth.some((a) => a.kind === "authorize-redirect")).toBe(true);
+    expect(nextAuth.some((a) => a.kind === "session-issuance")).toBe(true);
+    expect(nextAuth.every((a) => a.reason.includes("signIn"))).toBe(true);
+  });
+
+  it("guard-shaped 401 with NO auth library -> guard anchors exist but manufacture no finding", async () => {
+    const dir = fixtureAuthGuardWithoutAuthLibrary();
+    dirs.push(dir);
+
+    const { anchors, findings } = await runPipeline(dir, USER.email);
+
+    // Guard recognition is ungated on auth imports, same posture as db-write.
+    expect(anchors.some((a) => a.kind === "route-guard")).toBe(true);
+    expect(anchors.some((a) => a.kind === "guard-response")).toBe(true);
+    // ...and still cannot produce a finding on its own.
+    expect(findBySlug(findings, SESSION_SLUG)).toBeUndefined();
+    expect(findBySlug(findings, JWT_REFRESH_SLUG)).toBeUndefined();
   });
 });

@@ -16,7 +16,7 @@ import { loadTaxonomySlugs } from "../skill-detect.js";
 import { getCommitsAddedLines, type RawCommit } from "../git.js";
 import { isExcludedPath } from "../churn-exclusions.js";
 import { ScanError } from "../errors.js";
-import { WEBHOOK_PROVIDERS, IAP_PACKAGES } from "./anchors.js";
+import { WEBHOOK_PROVIDERS, IAP_PACKAGES, AUTH_LIBRARIES } from "./anchors.js";
 import type { AnchorHit, AnchorKind } from "./anchors.js";
 import type { ProofGraph } from "./graph.js";
 
@@ -35,7 +35,7 @@ import type { ProofGraph } from "./graph.js";
 // the moment they're added to WEBHOOK_PROVIDERS — see WEBHOOK_FLOW_PATTERNS
 // below. The one new "iap-flow" entry is a hand-written literal instead,
 // since it isn't derived from WEBHOOK_PROVIDERS at all.
-export type StructuralPatternKind = "webhook-flow" | "iap-flow";
+export type StructuralPatternKind = "webhook-flow" | "iap-flow" | "auth-flow";
 
 export interface StructuralPattern {
   /** Taxonomy slug (taxonomy.json) this pattern's classification produces. */
@@ -110,6 +110,15 @@ const WEBHOOK_FLOW_ANCHOR_KINDS: [AnchorKind, AnchorKind, AnchorKind] = ["webhoo
 // not the descriptors themselves.
 const MERCADOPAGO_SLUG = "payments/mercadopago-flow";
 
+// Every npm specifier any tracked auth library is identified by, deduped —
+// derived from anchors.ts's AUTH_LIBRARIES rather than restated, the same
+// single-source-of-truth rationale as `packages: provider.packages` above and
+// IAP_PACKAGES below. Used only by the AMBIGUOUS gate
+// (hasExternalImportForPackages): all three auth patterns share it because
+// "is an auth library present in this repo at all" is the same question for
+// each of them (see the auth entries in STRUCTURAL_PATTERNS).
+const AUTH_FLOW_PACKAGES = [...new Set(AUTH_LIBRARIES.flatMap((l) => l.packages))];
+
 export const STRUCTURAL_PATTERNS: StructuralPattern[] = [
   ...WEBHOOK_PROVIDERS.map(
     (provider): StructuralPattern => ({
@@ -129,6 +138,47 @@ export const STRUCTURAL_PATTERNS: StructuralPattern[] = [
     kind: "iap-flow",
     packages: IAP_PACKAGES, // derived from anchors.ts's own IAP_PACKAGES — see that constant's own comment
     anchorKinds: ["iap-configure", "iap-purchase", "iap-entitlement-gate"],
+  },
+  // Auth flows (issue #5). Three patterns, and — unlike payments — they are
+  // PER-FLOW rather than per-library: NextAuth, Supabase Auth, and plain JWT
+  // all feed the same three slugs, so every one of these anchor kinds is
+  // library-agnostic and shared (see anchors.ts's own auth section comment).
+  // That is why none of them needs a providerSlug filtering branch in
+  // anchorsForPatternKind, and why all three share AUTH_FLOW_PACKAGES for the
+  // AMBIGUOUS gate: "an auth library is present in this repo" is the same
+  // question for all three.
+  {
+    slug: "auth/session-flow",
+    kind: "auth-flow",
+    packages: AUTH_FLOW_PACKAGES,
+    anchorKinds: ["credential-verification", "session-issuance", "route-guard"],
+  },
+  {
+    slug: "auth/oauth-flow",
+    kind: "auth-flow",
+    packages: AUTH_FLOW_PACKAGES,
+    // authorize-redirect is the PRIMARY anchor (anchorKinds[0], see that
+    // field's own comment): building the provider authorize URL is the act
+    // whose lone presence already means "something OAuth-shaped is here".
+    anchorKinds: ["authorize-redirect", "code-exchange", "session-issuance"],
+  },
+  {
+    slug: "auth/jwt-refresh-flow",
+    kind: "auth-flow",
+    packages: AUTH_FLOW_PACKAGES,
+    // All three REQUIRED. refresh-rotation is not optional: a refresh flow
+    // without rotation is not a refresh flow. An earlier draft made it the
+    // optional member by analogy with Mercado Pago's idempotency-guard, and
+    // that was demonstrably wrong — "verify a token, deny with 401" then
+    // claimed this slug on code that refreshes nothing (reproduced against
+    // fixtureAuthSessionDirect; see refreshRotationHits' own comment in
+    // anchors.ts for the full argument).
+    anchorKinds: ["token-verification", "refresh-rotation", "guard-response"],
+    // The strengthener issue #5 actually describes — "rotation/invalidation
+    // of the OLD token" — as its own kind OUTSIDE the required triad. When
+    // absent repo-wide the pattern still classifies from the full triad,
+    // capped at `inferred`; when present it can reach `direct`.
+    optionalAnchorKinds: [{ kind: "refresh-invalidation" as AnchorKind, maxConfidenceWithoutOptional: "inferred" as StructuralConfidence }],
   },
 ];
 
@@ -152,6 +202,20 @@ export const STRUCTURAL_PATTERNS: StructuralPattern[] = [
 export const STRUCTURAL_SKILL_SLUG = "payments/payment-webhook-flow";
 
 export type StructuralConfidence = "direct" | "inferred" | "ambiguous";
+
+// Weakest-to-strongest. Used only by `weakerConfidence` below.
+const CONFIDENCE_ORDER: StructuralConfidence[] = ["ambiguous", "inferred", "direct"];
+
+/**
+ * The weaker of two confidences. A `maxConfidenceWithoutOptional` cap is a
+ * CEILING, never an assignment: capping at "inferred" must leave an
+ * already-ambiguous result ambiguous rather than promoting it. Writing the
+ * cap as a plain substitution would do exactly that promotion, which is why
+ * this is a function and not `cap ?? tier`.
+ */
+function weakerConfidence(a: StructuralConfidence, b: StructuralConfidence): StructuralConfidence {
+  return CONFIDENCE_ORDER.indexOf(a) <= CONFIDENCE_ORDER.indexOf(b) ? a : b;
+}
 
 export interface StructuralFinding {
   slug: string;
@@ -853,9 +917,60 @@ export function inferStructuralSkills(
 
   for (const pattern of STRUCTURAL_PATTERNS) {
     const [kindA, kindB, kindC] = pattern.anchorKinds;
-    const anchorsA = anchorsForPatternKind(anchors, kindA, pattern, sharedKindCache);
-    const anchorsB = anchorsForPatternKind(anchors, kindB, pattern, sharedKindCache);
-    const anchorsC = anchorsForPatternKind(anchors, kindC, pattern, sharedKindCache);
+    let anchorsA = anchorsForPatternKind(anchors, kindA, pattern, sharedKindCache);
+    let anchorsB = anchorsForPatternKind(anchors, kindB, pattern, sharedKindCache);
+    let anchorsC = anchorsForPatternKind(anchors, kindC, pattern, sharedKindCache);
+
+    // ── SAME-LIBRARY SCOPING for auth patterns ────────────────────────────
+    // Payments slugs are per-PROVIDER, so a webhook-verification hit carries
+    // providerSlug and anchorsForPatternKind filters by it. Auth slugs are
+    // per-FLOW, with several libraries feeding the same slug — which left a
+    // hole: a triad could be assembled from anchors belonging to DIFFERENT
+    // auth libraries and claim a flow no single library completes.
+    // Reproduced end-to-end by fixtureAuthMixedLibraries (NextAuth signIn +
+    // Supabase exchangeCodeForSession + jwt.verify, all in one import chain,
+    // producing a CLAIMED auth/oauth-flow and auth/session-flow).
+    //
+    // Fix: scope this pattern's library-bearing anchors to ONE library.
+    // Library-agnostic anchors (guards, refresh-invalidation — libraryId
+    // unset) stay visible to every scope, since `res.status(401)` belongs to
+    // no auth library and a real single-library flow must still find it.
+    //
+    // The library chosen is the one covering the most of this pattern's
+    // required kinds. Ties go to the FIRST LIBRARY ENCOUNTERED while walking
+    // this pattern's anchor arrays in kind order (anchorsA, then B, then C,
+    // each already sorted by path/line) — NOT AUTH_LIBRARIES declaration
+    // order, which this comment previously claimed. Deterministic either
+    // way, since findAnchors' output is deterministic, but the two are not
+    // the same order and the code follows the former.
+    // KNOWN, ACCEPTED LIMIT: this picks a scope by
+    // kind-coverage BEFORE running the connectivity search, so if the
+    // best-covered library's anchors turn out not to connect while a
+    // lesser-covered one's would have, this under-claims rather than
+    // searching every scope and taking the strongest. Under-claiming is this
+    // module's stated posture, and a full per-scope search can replace this
+    // selection without touching anything else if it proves too strict.
+    //
+    // NOTE this necessarily stops a genuinely MIXED stack (e.g. NextAuth for
+    // OAuth, Supabase for session persistence) from claiming. That is the
+    // intended trade: capping such a finding at `inferred` instead would NOT
+    // have helped, because buildFinding sets
+    // `claimed = confidence !== "ambiguous" && attributed` — an inferred
+    // finding still claims. Only scoping (or degrading to ambiguous)
+    // actually prevents the false claim.
+    if (pattern.kind === "auth-flow") {
+      const groups = [anchorsA, anchorsB, anchorsC];
+      const libraryIds = [...new Set(groups.flat().map((a) => a.libraryId).filter((id): id is string => !!id))];
+      if (libraryIds.length > 1) {
+        const coverage = (id: string): number =>
+          groups.filter((g) => g.some((a) => a.libraryId === id || a.libraryId === undefined)).length;
+        let bestId = libraryIds[0];
+        for (const id of libraryIds) if (coverage(id) > coverage(bestId)) bestId = id;
+        const inScope = (g: AnchorHit[]): AnchorHit[] =>
+          g.filter((a) => a.libraryId === undefined || a.libraryId === bestId);
+        [anchorsA, anchorsB, anchorsC] = [inScope(anchorsA), inScope(anchorsB), inScope(anchorsC)];
+      }
+    }
     // This pattern's OWN anchors only — used for every AMBIGUOUS finding
     // below (see this function's own doc comment, step 3).
     const ownAnchors = [...anchorsA, ...anchorsB, ...anchorsC];
@@ -864,7 +979,17 @@ export function inferStructuralSkills(
       (opt) => anchorsForPatternKind(anchors, opt.kind, pattern, sharedKindCache).length === 0
     );
 
-    if (missingOptional) {
+    // An optional kind may sit EITHER inside this pattern's own triad (the
+    // Mercado Pago shape: idempotency-guard is one of its three, so its
+    // absence degrades the search to a 2-kind pair) OR entirely outside it
+    // (the auth/jwt-refresh-flow shape: refresh-invalidation is a
+    // strengthener, never a member, so its absence changes nothing about
+    // WHICH search runs and only caps the resulting confidence). The two
+    // cases need different handling and are split here rather than forcing
+    // one into the other's shape.
+    const optionalIsTriadMember = missingOptional ? pattern.anchorKinds.includes(missingOptional.kind) : false;
+
+    if (missingOptional && optionalIsTriadMember) {
       // Step 1b — see this function's own doc comment and
       // StructuralPattern.optionalAnchorKinds' own comment.
       const allKindHits: [AnchorKind, AnchorHit[]][] = [
@@ -918,15 +1043,23 @@ export function inferStructuralSkills(
       // findSameFileTriple/findInferredTriple themselves are BYTE-FOR-BYTE
       // unchanged (see their own comments) — this is the "reuse... generalized
       // over which 3 kinds it looks for" the milestone asked for.
+      // When an optional kind that lives OUTSIDE this triad is missing, the
+      // full triple search still runs (all three required kinds are present)
+      // and only the resulting confidence is capped — see optionalIsTriadMember
+      // above. `connection` is untouched either way, so `explain` keeps
+      // reporting the real topology alongside the capped confidence.
+      const cap = (tier: StructuralConfidence): StructuralConfidence =>
+        missingOptional ? weakerConfidence(tier, missingOptional.maxConfidenceWithoutOptional) : tier;
+
       const sameFunction = findSameFunctionTriple(anchorsA, anchorsB, anchorsC);
       if (sameFunction) {
-        findings.push(buildFinding(pattern.slug, "direct", sameFunction, { kind: "same-function", edgeDistance: 0 }, userTouchedFiles));
+        findings.push(buildFinding(pattern.slug, cap("direct"), sameFunction, { kind: "same-function", edgeDistance: 0 }, userTouchedFiles));
         continue;
       }
 
       const sameFile = findSameFileTriple(anchorsA, anchorsB, anchorsC);
       if (sameFile) {
-        findings.push(buildFinding(pattern.slug, "direct", sameFile, { kind: "same-file", edgeDistance: 0 }, userTouchedFiles));
+        findings.push(buildFinding(pattern.slug, cap("direct"), sameFile, { kind: "same-file", edgeDistance: 0 }, userTouchedFiles));
         continue;
       }
 
@@ -935,7 +1068,7 @@ export function inferStructuralSkills(
         findings.push(
           buildFinding(
             pattern.slug,
-            "inferred",
+            cap("inferred"),
             inferred.result.triple,
             { kind: "cross-file", edgeDistance: inferred.result.edgeDistance },
             userTouchedFiles
