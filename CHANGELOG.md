@@ -8,6 +8,8 @@ always bump at least minor; breaking schema changes bump major.
 ## [Unreleased]
 
 ### Added
+- `redential --version` (and `-V`) prints the CLI version. Program
+  construction moved into a testable `createProgram()` to cover it.
 - Map the `zod` npm import to `validation/zod` (Tier 1).
 - Add Tier 2 signature for Storybook (`frontend/storybook`): detects
   `.storybook/main.*` and `.storybook/preview.*` config files,
