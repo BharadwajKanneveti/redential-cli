@@ -7,6 +7,9 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+### Changed
+- Refactored CLI program construction into a reusable `createProgram()` function and added tests covering the `--version` and `-V`     commands.
+
 ### Added
 - Map the `zod` npm import to `validation/zod` (Tier 1).
 - Add Tier 2 signature for Storybook (`frontend/storybook`): detects
