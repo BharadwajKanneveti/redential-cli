@@ -7,6 +7,8 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-02
+
 ### Added
 - Add Tier 2 CircleCI detection (`infra/circleci`) for `.circleci/config.yml`, with positive and near-miss fixtures (#24).
 - Add `infra/circleci` to the closed skill taxonomy (#24).
@@ -33,6 +35,13 @@ always bump at least minor; breaking schema changes bump major.
 - Document the global install conflict between `redential` and `@redential/cli`, with guidance for updating or switching between them.
 - Bump the checkout and setup-node GitHub Actions to their current v7 majors so CI uses Node 24-compatible action runtimes.
 
+### Fixed
+- Detect package additions from `package.json` dependency blocks
+  (`dependencies`, `devDependencies`, and `peerDependencies`) as Tier 1
+  evidence using the existing package signature map. (This entry was
+  misfiled under 0.7.0 for a few days: the change merged the day after
+  0.7.0 shipped and first reaches users in this release.)
+
 ## [0.7.0] - 2026-07-28
 
 ### Added
@@ -50,7 +59,6 @@ always bump at least minor; breaking schema changes bump major.
 - Add `frontend/storybook` to the closed skill taxonomy for Storybook work.
 
 ### Fixed
-- Detect package additions from `package.json` dependency blocks (`dependencies`, `devDependencies`, and `peerDependencies`) as Tier 1 evidence using the existing package signature map.
 - Map the `prisma` and `wrangler` packages to their existing taxonomy slugs, closing package detection gaps.
 - Fix the author identity prompt showing "1 commits" instead of "1 commit" when a single commit is found.
 - Improved non-interactive prompt errors by adding actionable guidance to use `--author <email>` and `--yes` when author identity selection or authorization confirmation cannot be completed because input is unavailable.
