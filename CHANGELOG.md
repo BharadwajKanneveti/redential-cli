@@ -7,6 +7,8 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-03
+
 ### Added
 - Add 34 slugs to the closed skill taxonomy (1.10.0), spanning two new
   categories, `ml/` (6 slugs: PyTorch, TensorFlow, scikit-learn, XGBoost,
