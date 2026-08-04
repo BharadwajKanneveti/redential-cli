@@ -7,6 +7,8 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-04
+
 ### Added
 - **RFC 6962 Merkle Tree Hash for `integrity.merkle_root`, with a new
   `integrity.algorithm` enum value — bundle schema `1.2.0` → `1.3.0`
