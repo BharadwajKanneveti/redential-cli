@@ -56,3 +56,50 @@ jobs:
       # npmjs.com's Trusted Publisher config (Redential/redential-cli +
       # release.yml) at publish time.
       - run: npm publish --provenance --access public
+
+  # Publishes both bare-name aliases (packages/redential-cli and
+  # packages/redential) right after the main package, instead of the owner
+  # doing it by hand later. This used to be a manual step and it drifted:
+  # both aliases sat at 0.5.0 on npm while @redential/cli reached 0.9.0, so
+  # `npx redential`/`npx redential-cli` could resolve a stale floor. Gating
+  # this job on `needs: publish` keeps it from ever running ahead of (or
+  # without) a successful main-package publish.
+  #
+  # There is no rename trick: each alias is its own checked-in directory
+  # under packages/ with its own package.json name (`redential-cli` and
+  # `redential`), so this job just runs `npm publish` twice, once per
+  # directory — both ship the exact same one-file launcher, just
+  # registered under two names for discoverability/typosquat defense.
+  #
+  # OIDC trusted publishing requires a npmjs.com Trusted Publisher entry
+  # for EACH package name individually, pointing at this repo and this
+  # workflow file. That means BOTH `redential-cli` and `redential` need
+  # their own Trusted Publisher config (see docs/releasing.md) — if either
+  # is missing or misconfigured, this job fails on that publish step while
+  # the `publish` job above (and therefore @redential/cli's release) is
+  # unaffected, since jobs in this workflow don't share failure state.
+  publish-alias:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      # Same npm 11 requirement as the main publish job above — OIDC
+      # trusted publishing needs npm >= 11.5 and Node 20 runners ship
+      # npm 10.
+      - run: npm install -g npm@11
+
+      # Neither alias has a build step or tests of its own (each is a
+      # single bin.js that forwards argv into @redential/cli); the
+      # `publish` job's `npm test`/`tsc`/`npm run build` already gate the
+      # real logic both aliases depend on via `needs: publish`.
+      - run: npm publish --provenance --access public
+        working-directory: packages/redential-cli
+
+      - run: npm publish --provenance --access public
+        working-directory: packages/redential

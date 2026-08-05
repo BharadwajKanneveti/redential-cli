@@ -104,28 +104,33 @@ registration against typosquatting. Each is just a `package.json`, a
 minimal `bin.js` that imports `@redential/cli`'s real bin, and a README —
 no build step, no `dist/`.
 
-They are **not** part of this package's release pipeline
-(`release.yml` never touches `packages/`) and are **not** published
-automatically on every `@redential/cli` release. The owner publishes them
-manually, from each `packages/*` directory:
+**Both aliases publish automatically**, as a `publish-alias` job in
+`release.yml` gated on `needs: publish` (so it only runs after a
+successful `@redential/cli` release). That job runs `npm publish` twice,
+once per directory — `packages/redential-cli` under its checked-in name
+`redential-cli`, then `packages/redential` under its checked-in name
+`redential`. There's no rename trick: each is its own directory with its
+own `package.json` name, publishing the exact same launcher under two
+names. This replaced a manual step: both aliases had drifted to 0.5.0 on
+npm while `@redential/cli` reached 0.9.0 before this automation existed.
 
-```bash
-cd packages/redential && npm publish --provenance --access public
-cd packages/redential-cli && npm publish --provenance --access public
-```
+OIDC trusted publishing requires npmjs.com's Trusted Publisher config to be
+set up for **each** package name separately, pointing at
+`Redential/redential-cli` + `release.yml` — `redential-cli` and `redential`
+each need their own entry, same as `@redential/cli`'s. If one is missing
+or misconfigured, only that directory's publish step in `publish-alias`
+fails; the `publish` job (the main `@redential/cli` release) and the other
+alias's publish step are unaffected.
 
-**When to bump an alias's own version:** only when the launcher itself
-changes (e.g. the import path into `@redential/cli` changes) or the
-floating dependency range needs tightening — not on every `@redential/cli`
-release. Each alias depends on `"@redential/cli": ">=0.5.0"`, a
-deliberately floating range: since the alias has no logic of its own
-beyond forwarding argv to whatever `@redential/cli` version npm resolves,
-a normal `@redential/cli` release (a new minor/patch, a new command, a new
-schema version) needs no corresponding alias release — npm resolves the
-floating range to the latest compatible `@redential/cli` on every fresh
-install automatically. A hard version pin would instead require a manual
-alias republish after every single `@redential/cli` release just to bump
-that pin, for no behavioral benefit.
+**When to bump an alias's own version:** the automated `publish-alias` job
+relies on both `packages/redential-cli` and `packages/redential` having
+their version and `"@redential/cli"` dependency floor bumped on every
+`@redential/cli` release, as part of the same version-bump step described
+above — this keeps stale ranges or npm's resolution cache from pinning a
+fresh install below the current release, even though the range itself
+(`>=x.y.z`) already floats to the latest compatible `@redential/cli` on
+every install regardless of the floor's exact value. Neither alias is
+published manually anymore.
 
 ## Local checks before tagging
 
