@@ -43,7 +43,16 @@ async function run(action: () => Promise<void> | void): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    throw err;
+    // Final catch-all: an unexpected (non-domain) error still must never
+    // print a raw stack trace to the user — "stack traces without payload"
+    // is the repo's error policy, and an uncaught throw would otherwise
+    // dump one straight to stderr. Prints only `err.message`, exactly like
+    // the domain-error branch above, so this can never echo a token or
+    // bundle payload that happened to be embedded in a lower-level error's
+    // properties (only its message string is ever read here).
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Error: ${message}`);
+    process.exitCode = 1;
   }
 }
 

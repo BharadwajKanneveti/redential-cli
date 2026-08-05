@@ -5,6 +5,7 @@ import {
   getRemoteHostType,
   getRootCommitDate,
   getRootCommitSha,
+  isShallowRepository,
   type RawCommit,
 } from "./git.js";
 import { saltedHash } from "./hash.js";
@@ -144,9 +145,22 @@ export async function runScan(opts: ScanOptions): Promise<Bundle> {
   const ageDays = Math.floor((now.getTime() - repoFirstCommitDate.getTime()) / MS_PER_DAY);
   const hostType = getRemoteHostType(opts.repoPath);
   const repoFingerprint = computeRepoFingerprint(opts.repoPath, opts.configDir);
+  const isShallow = isShallowRepository(opts.repoPath);
 
-  const firstAt = userCommits[0].authorDate;
-  const lastAt = userCommits[userCommits.length - 1].authorDate;
+  // The true min/max author date over the user's commits, NOT the first/last
+  // entries in git-log (topological) order — after a rebase or squash,
+  // author dates can be out of log order, and taking userCommits[0]/[last]
+  // would silently report a span narrower than the commits actually cover
+  // (and inconsistent with integrity.date_forensics.author_span_days, which
+  // is already computed as a true min/max below). An explicit loop, not
+  // Math.min/max(...arr), for the same call-argument-limit reason
+  // computeDateForensics documents on its own min/max loop.
+  let firstAt = userCommits[0].authorDate;
+  let lastAt = userCommits[0].authorDate;
+  for (const c of userCommits) {
+    if (c.authorDate.getTime() < firstAt.getTime()) firstAt = c.authorDate;
+    if (c.authorDate.getTime() > lastAt.getTime()) lastAt = c.authorDate;
+  }
   const spanDays = Math.floor((lastAt.getTime() - firstAt.getTime()) / MS_PER_DAY);
 
   const hourHistogram = new Array(24).fill(0) as number[];
@@ -187,11 +201,19 @@ export async function runScan(opts: ScanOptions): Promise<Bundle> {
   const dateForensics = computeDateForensics(userCommits);
 
   const bundle: Bundle = {
-    schema_version: "1.3.0",
+    schema_version: "1.4.0",
     runner: "local",
     tool_version: opts.toolVersion,
     created_at: now.toISOString(),
-    repo: { host_type: hostType, age_days: ageDays, repo_fingerprint: repoFingerprint },
+    repo: {
+      host_type: hostType,
+      age_days: ageDays,
+      repo_fingerprint: repoFingerprint,
+      // Present ONLY for a shallow clone (see src/shallow-repo.ts's own
+      // comment on why this matters) — absent, never `false`, for an
+      // ordinary full clone. See docs/schema.md's `repo` section.
+      ...(isShallow ? { shallow: true as const } : {}),
+    },
     identity: {
       author_identity_hashes: authorHashes,
       other_contributors_count: otherContributorsCount,

@@ -160,9 +160,27 @@ export async function promptUseGitIdentity(
 // the code already did.
 const ATTESTATION_TEXT = "Confirm you are authorized to analyze this repository.";
 
+/**
+ * Context lines printed immediately before the attestation question itself
+ * — via `console.log`, same as promptAuthors' own "Which of these..."
+ * interstitial line, deliberately NOT written to `streams.output` (the
+ * injectable stream `rl.question()` writes the prompt string to). Keeping
+ * it off `streams.output` is what lets test/prompt.test.ts assert the
+ * prompt text is byte-for-byte exactly `ATTESTATION_TEXT` — this context is
+ * explanatory framing around that question, not part of it.
+ */
+function printAttestationContext(): void {
+  console.log("Redential asks this because you may be scanning an employer's repository.");
+  console.log(
+    "The scan reads git history locally; only anonymized metadata (no code, no file names, no commit " +
+      "messages) is ever included in a bundle, and nothing is uploaded without a separate explicit confirmation."
+  );
+}
+
 export async function promptConfirmAttestation(
   streams: PromptStreams = DEFAULT_STREAMS
 ): Promise<boolean> {
+  printAttestationContext();
   const rl = createInterface(streams);
   try {
     const answer = await questionOrThrowOnClose(

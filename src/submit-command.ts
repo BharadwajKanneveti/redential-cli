@@ -100,6 +100,42 @@ export function formatShortUploadSummary(bundle: Bundle, plain: boolean | undefi
   );
 }
 
+// Below this many commits (with real history — see the span check below
+// too), the resulting credential says very little: "10" is a deliberately
+// low, non-scientific floor, just enough to catch the "ran this on a repo
+// with almost nothing in it yet" case without nagging on genuinely small
+// but real work.
+const THIN_HISTORY_COMMIT_FLOOR = 10;
+
+/**
+ * Non-blocking, informational only — same "warn, never block" stance as
+ * public-remote.ts/shallow-repo.ts. Called once, after the bundle is built
+ * but before the consent box, so the user sees this before deciding to
+ * upload rather than after. A shallow clone always wins over the plain
+ * thin-history check: even a shallow clone with 10+ visible commits is
+ * still truncated, missing whatever history sits before the shallow
+ * boundary, so its own (more specific) message is the useful one — the
+ * generic "scan a repo with more history" advice would be actively
+ * misleading there, since more history already exists locally, just not
+ * fetched.
+ */
+export function thinHistoryNotice(bundle: Bundle): string | null {
+  if (bundle.repo.shallow === true) {
+    return (
+      "Note: this scan ran on a truncated (shallow) clone — the resulting credential will be weak, " +
+      "since history before the shallow boundary isn't available. Run `git fetch --unshallow` (or clone " +
+      "the full repository) and rescan for a stronger one."
+    );
+  }
+  if (bundle.commits.user_total < THIN_HISTORY_COMMIT_FLOOR || bundle.commits.span_days === 0) {
+    return (
+      "Note: very little history was found for you in this repo — the resulting credential will be " +
+      "weak. Consider scanning a repo with more of your commit history."
+    );
+  }
+  return null;
+}
+
 /**
  * The consent-surface line for the private label — printed right after the
  * exact JSON, right before the upload prompt (see the "Output order"
@@ -150,6 +186,13 @@ export async function executeSubmitCommand(opts: SubmitCommandOptions): Promise<
   // includes it for `scan`'s own path (see build-bundle.ts).
   if (bundle === null) return;
   const bundleJson = JSON.stringify(bundle, null, 2);
+
+  // Thin-history / shallow-clone advisory — see thinHistoryNotice's own
+  // comment. Printed here, before any of the consent-surface output below
+  // (the short summary, the consent box, the exact payload), non-blocking:
+  // stderr only, never changes stdout, never throws, no new prompt.
+  const historyNotice = thinHistoryNotice(bundle);
+  if (historyNotice) warn(historyNotice);
 
   // Private label resolution (see docs/private-label.md) — MANDATORY,
   // resolved/validated before any of this function's own network calls

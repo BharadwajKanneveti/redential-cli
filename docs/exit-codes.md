@@ -14,7 +14,11 @@ never set).
 | **1** | Expected failure — a `ScanError`, `AuthError`, `SubmitError`, or `NetworkError` (see [errors](#domain-errors-exit-1)). Commander flag/argument mistakes also exit **1** when `parse()` rejects the invocation. |
 
 Unhandled exceptions (bugs, unexpected I/O failures outside those four error
-types) may exit with a non-zero code that is **not** part of this contract.
+types) are caught by `run()`'s final catch-all: exit code **1**, with only
+`Error: <message>` printed to stderr — never a raw stack trace. The exact
+message text for this fallback path is not part of the stability contract
+below (it's whatever the underlying error happened to say), but the shape
+(exit 1, one line, no stack) is.
 
 ## Domain errors (exit 1)
 

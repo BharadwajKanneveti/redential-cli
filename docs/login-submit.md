@@ -148,7 +148,14 @@ selection, same authorization-confirmation prompt, same `runScan`. It then:
    interactive prompt inside step 3's sequence below; otherwise (non-TTY
    with no `--label`) `submit` refuses immediately, before any network
    call at all, before this repo's bundle JSON is even printed.
-3. On a real TTY, output happens in a fixed order, everything before the
+3. Once the bundle is built, and before the consent box below, `submit`
+   checks whether it looks weak — fewer than 10 authored commits, a
+   zero-day span, or `repo.shallow === true` — and if so prints a
+   non-blocking stderr notice (`thinHistoryNotice`, `src/submit-command.ts`)
+   suggesting a rescan with more history (or, for a shallow clone
+   specifically, `git fetch --unshallow` and a rescan). Never blocks the
+   submit, never a new prompt, never changes the exit code. On a real TTY,
+   output then happens in a fixed order, everything before the
    upload prompt (console-UX milestone, 2026-07 — see
    [CHANGELOG.md](../CHANGELOG.md)):
    1. A one-line **short summary** — span of history, commit count, and

@@ -13,6 +13,7 @@ import {
   isShallowRepository,
 } from "../src/git.js";
 import { extractImportedPackages } from "../src/import-detect.js";
+import { ScanError } from "../src/errors.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -370,5 +371,26 @@ describe("getConfiguredUserEmail", () => {
     dirs.push(dir);
     execFileSync("git", ["config", "user.email", "nobody-else@example.com"], { cwd: dir });
     expect(getConfiguredUserEmail(dir)).toBe("nobody-else@example.com");
+  });
+});
+
+describe("getAllCommits — non-git directory", () => {
+  it("rejects with a ScanError carrying a clean, actionable message instead of a raw git-log Error", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "redential-not-a-repo-"));
+    dirs.push(dir);
+
+    await expect(getAllCommits(dir)).rejects.toThrow(ScanError);
+    await expect(getAllCommits(dir)).rejects.toThrow(`Not a git repository: ${dir}`);
+
+    // The message must stay a single actionable line — no leaked raw git
+    // stderr text ("fatal: ...") and no stack-trace-shaped content.
+    try {
+      await getAllCommits(dir);
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(ScanError);
+      expect((err as Error).message).not.toContain("fatal:");
+      expect((err as Error).message).toContain("--repo <path-to-repo>");
+    }
   });
 });

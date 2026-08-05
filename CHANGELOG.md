@@ -7,6 +7,55 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [Unreleased]
 
+### Added
+- **`repo.shallow` optional boolean — bundle schema `1.3.0` → `1.4.0`
+  (minor, additive).** Present with value `true` ONLY when the scanned
+  clone is shallow (`git clone --depth N`, or a CI checkout action that
+  defaults to one); absent, never `false`, for an ordinary full clone. A
+  single boolean carrying zero employer information — added so verifiers
+  can distinguish "genuinely short history" from "truncated clone", since
+  a shallow clone silently understates `repo.age_days`,
+  `commits.span_days`, and commit counts with no other indication why.
+  Reuses the same shallow-clone detection `scan` already runs for its
+  stderr warning (`src/shallow-repo.ts`). Field docs:
+  [docs/schema.md](docs/schema.md#repo).
+- **Node.js version check at startup.** The CLI now verifies the running
+  Node.js version before doing anything else and exits with a clear
+  one-line message when it is older than the supported minimum (Node 20),
+  instead of failing later with a confusing
+  `ReferenceError: fetch is not defined`.
+- **Local-only notice at scan start.** Before any prompt, `scan` (and the
+  scan phase of `submit`) prints: "This scan runs 100% locally. Nothing is
+  read from the network, nothing leaves your machine until you explicitly
+  run `redential submit`." The authorization prompt also gained two context
+  lines explaining why it is asked and what never leaves the machine.
+- **Thin-history notice before submit.** If the bundle covers fewer than
+  10 commits or a zero-day span, `submit` prints a non-blocking notice that
+  the credential will be weak; on a shallow clone the notice instead
+  recommends `git fetch --unshallow` and a rescan.
+
+### Changed
+- **Honest empty-detection copy.** When no signatures match, the scan
+  summary now says detection only covers technologies in the public
+  taxonomy and invites proposing additions, instead of implying that more
+  commits would eventually match.
+
+### Fixed
+- **`commits.first_at`/`last_at`/`span_days` now use the true min/max
+  author date, not git-log order.** They were previously read off
+  `userCommits[0]`/`userCommits[last]` — the walk's topological order —
+  which after a rebase or squash can leave author dates out of order,
+  producing a `span_days` narrower than the commits actually cover and
+  internally inconsistent with `integrity.date_forensics.author_span_days`
+  (already a true min/max over the same commits) and with
+  `detected_skills[].first_seen`/`last_seen`. No schema change: same
+  fields, same shape, just computed correctly.
+- **Clean error for non-git directories.** `redential scan --repo <path>`
+  against a directory that is not a git repository now prints an
+  actionable one-line error and exits 1, instead of an uncaught Node
+  stack trace. A top-level catch-all now guarantees any unexpected error
+  prints `Error: <message>` with no stack trace.
+
 ## [0.9.0] - 2026-08-04
 
 ### Added

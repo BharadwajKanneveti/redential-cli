@@ -30,6 +30,14 @@ skipped.
 
 ## How it works
 
+0. **Local-only notice.** Before anything else — before the connectable-repo
+   notice below, before any prompt — `scan` prints one line to stderr:
+   ```
+   This scan runs 100% locally. Nothing is read from the network, nothing leaves your machine until you explicitly run `redential submit`.
+   ```
+   Non-blocking, printed in every mode (TTY and piped/non-TTY alike); stdout
+   is unaffected, so the piped bundle JSON stays byte-identical. `submit`
+   reaches the same line too, since it shares this exact flow.
 1. **Connectable-repo notice.** If the repo's remote looks like it's hosted
    on a known public host (github.com/gitlab.com/bitbucket.org —
    `isKnownPublicHost`, `src/public-remote.ts`), `scan` prints an
@@ -69,7 +77,14 @@ skipped.
    that one at all". Non-interactively, pass `--author <email>` (repeatable)
    for every email that's yours — this skips identity selection entirely,
    unaffected by any of the above.
-4. **Confirm authorization.** You must explicitly confirm "Confirm you are
+4. **Confirm authorization.** Interactively, the prompt is preceded by two
+   short context lines explaining why it's asked and what does (and does
+   not) leave the machine:
+   ```
+   Redential asks this because you may be scanning an employer's repository.
+   The scan reads git history locally; only anonymized metadata (no code, no file names, no commit messages) is ever included in a bundle, and nothing is uploaded without a separate explicit confirmation.
+   ```
+   You must then explicitly confirm "Confirm you are
    authorized to analyze this repository. (y/N)" — interactively via a
    prompt, or non-interactively via `--yes`. The default flips to N:
    pressing Enter declines, you must type `y` to proceed. This is a

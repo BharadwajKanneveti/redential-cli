@@ -11,7 +11,7 @@
     "categories", "detected_skills", "ownership", "integrity", "attestation"
   ],
   "properties": {
-    "schema_version": { "const": "1.3.0" },
+    "schema_version": { "const": "1.4.0" },
     "runner": { "enum": ["local", "ci"] },
     "tool_version": { "type": "string" },
     "created_at": { "type": "string", "format": "date-time" },
@@ -25,6 +25,10 @@
         "repo_fingerprint": {
           "type": "string",
           "description": "Salted hash of the root commit sha. Lets the server detect re-submissions of the same repo without knowing which repo it is."
+        },
+        "shallow": {
+          "type": "boolean",
+          "description": "Optional (since schema 1.4.0). Present with value true ONLY when the scanned clone is shallow (git clone --depth N, or a CI checkout action that defaults to one) — history before the shallow boundary isn't available locally, so age_days/commits.span_days/commit counts may understate real activity. Absent, never false, for an ordinary full clone. A single boolean carrying zero employer information, added so verifiers can distinguish a genuinely short history from a truncated clone."
         }
       }
     },

@@ -198,7 +198,7 @@ describe("formatSummary", () => {
 
   it("falls back to teaser copy when detected_skills is empty, without throwing", () => {
     const text = stripAnsi(formatSummary(baseBundle({ detected_skills: [] })));
-    expect(text).toContain("No capabilities detected yet");
+    expect(text).toContain("No signatures matched");
   });
 
   it("falls back to teaser copy when languages/categories are empty, without throwing", () => {

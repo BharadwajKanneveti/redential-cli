@@ -139,4 +139,59 @@ describe("integrity.date_forensics", () => {
     expect(forensics.mismatch_ratio).toBeLessThan(0.5);
     expect(forensics.committer_burst_ratio).toBeLessThan(0.5);
   });
+
+  it("commits.first_at/last_at/span_days use the true min/max author date, not git-log order", async () => {
+    // Simulates a rebase: the commit chain (parent order, and every
+    // committer date) is a normal, monotonic "just replayed now" sequence,
+    // but the AUTHOR dates attached to that same chain are deliberately out
+    // of order — commit 0 in the chain is authored latest, commit 1 is
+    // authored earliest, the rest fall in between. A bug that reads
+    // userCommits[0]/[last] (git-log/topological order) instead of the true
+    // min/max author date would report a span narrower than the commits
+    // actually cover, and would disagree with
+    // integrity.date_forensics.author_span_days (already computed as a true
+    // min/max) on the very same commit population.
+    const COMMIT_COUNT = 6;
+    const authorDatesIso = [
+      "2026-06-01T00:00:00Z", // chain position 0 — latest author date
+      "2020-01-01T00:00:00Z", // chain position 1 — earliest author date
+      "2022-03-10T00:00:00Z",
+      "2024-07-20T00:00:00Z",
+      "2021-11-05T00:00:00Z",
+      "2023-09-15T00:00:00Z",
+    ];
+    expect(authorDatesIso).toHaveLength(COMMIT_COUNT);
+    const committerNow = "2026-07-30T09:00:00Z"; // rebase "replayed just now"
+
+    const commits: DualDateCommit[] = authorDatesIso.map((authorDate, i) => ({
+      path: `f${i}.ts`,
+      content: `${i}\n`,
+      authorDate,
+      committerDate: committerNow,
+    }));
+
+    const dir = createRepoWithDualDateHistory("You", AUTHOR_EMAIL, commits);
+    dirs.push(dir);
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: [AUTHOR_EMAIL],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir: tempConfigDir(),
+    });
+
+    const trueMinMs = Math.min(...authorDatesIso.map((d) => new Date(d).getTime()));
+    const trueMaxMs = Math.max(...authorDatesIso.map((d) => new Date(d).getTime()));
+    const expectedSpanDays = Math.floor((trueMaxMs - trueMinMs) / MS_PER_DAY);
+
+    expect(bundle.commits.first_at).toBe(new Date(trueMinMs).toISOString());
+    expect(bundle.commits.last_at).toBe(new Date(trueMaxMs).toISOString());
+    expect(bundle.commits.span_days).toBe(expectedSpanDays);
+
+    // Internally consistent with the independently-computed date_forensics
+    // aggregate over the exact same commit population — the contradiction
+    // this fix closes.
+    expect(bundle.commits.span_days).toBe(bundle.integrity.date_forensics.author_span_days);
+  });
 });

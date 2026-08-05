@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cleanup, commit, createRepo, setRemote } from "./support/fixtures.js";
+import { cleanup, commit, createRepo, createShallowClone, setRemote } from "./support/fixtures.js";
 import { startMockServer, type MockServer, type RecordedRequest } from "./support/mock-server.js";
 import { saveCredentials } from "../src/credentials.js";
-import { executeSubmitCommand, formatShortUploadSummary } from "../src/submit-command.js";
+import { executeSubmitCommand, formatShortUploadSummary, thinHistoryNotice } from "../src/submit-command.js";
 import { AuthError, ScanError, SubmitError } from "../src/errors.js";
 import { bundleContentHash, readLastSubmission } from "../src/submission-record.js";
 import type { Bundle } from "../src/types.js";
@@ -82,6 +82,37 @@ describe("formatShortUploadSummary", () => {
     // eslint-disable-next-line no-control-regex
     expect(text).toMatch(/^[\x20-\x7e\n]*$/);
     expect(text).not.toContain("·");
+  });
+});
+
+describe("thinHistoryNotice", () => {
+  it("returns null for a bundle with plenty of history and no shallow flag", () => {
+    expect(thinHistoryNotice(baseBundle())).toBeNull();
+  });
+
+  it("returns a thin-history notice when user_total is below the floor", () => {
+    const notice = thinHistoryNotice(baseBundle({ commits: { ...baseBundle().commits, user_total: 3 } }));
+    expect(notice).toContain("very little history");
+    expect(notice).not.toContain("shallow");
+  });
+
+  it("returns a thin-history notice when span_days is 0, even with many commits", () => {
+    const notice = thinHistoryNotice(
+      baseBundle({ commits: { ...baseBundle().commits, user_total: 500, span_days: 0 } })
+    );
+    expect(notice).toContain("very little history");
+  });
+
+  it("returns the shallow-clone notice when repo.shallow is true, even with plenty of commits", () => {
+    const notice = thinHistoryNotice(
+      baseBundle({
+        commits: { ...baseBundle().commits, user_total: 5000, span_days: 900 },
+        repo: { ...baseBundle().repo, shallow: true },
+      })
+    );
+    expect(notice).toContain("truncated (shallow) clone");
+    expect(notice).toContain("git fetch --unshallow");
+    expect(notice).not.toContain("very little history");
   });
 });
 
@@ -827,7 +858,16 @@ describe("executeSubmitCommand — private label", { timeout: 30_000 }, () => {
     const labelIndex = server.requests.indexOf(labelReq);
     expect(bundleIndex).toBeLessThan(labelIndex);
 
-    expect(warnings).toEqual([]);
+    // The always-on local-only notice, and the thin-history notice (this
+    // fixture's single commit is below the floor — see
+    // "submit's thin-history / shallow-clone advisory" below) are expected
+    // here; nothing else — no guardrail-specific warning leaked in.
+    expect(warnings).toEqual([
+      "This scan runs 100% locally. Nothing is read from the network, nothing leaves your machine " +
+        "until you explicitly run `redential submit`.",
+      "Note: very little history was found for you in this repo — the resulting credential will be " +
+        "weak. Consider scanning a repo with more of your commit history.",
+    ]);
   });
 
   it("a private-label-POST failure (500) still leaves the bundle uploaded — warns with the label, does not throw (exit 0)", async () => {
@@ -979,5 +1019,93 @@ describe("executeSubmitCommand — private label", { timeout: 30_000 }, () => {
     // TTY order) did print before the failure.
     expect(logs.some((l) => l.includes("WHAT GETS UPLOADED"))).toBe(true);
     expect(logs.some((l) => l.includes("Exact payload"))).toBe(false);
+  });
+});
+
+describe("submit's thin-history / shallow-clone advisory (non-blocking)", () => {
+  it("warns about weak history for a repo with a single commit, printed before the consent box, and still uploads", async () => {
+    const server = await startMockServer((req) => {
+      if (req.url === "/api/cli/bundles") return { status: 200, body: { id: "ok" } };
+      return { status: 404, body: {} };
+    });
+    servers.push(server);
+    process.env.REDENTIAL_SITE_URL = server.url;
+
+    const dir = repoWithOneCommit();
+    const configDir = tempConfigDir();
+    saveCredentials({ access_token: "t", site_url: server.url, obtained_at: "now" }, configDir);
+
+    const warnings: string[] = [];
+    const logs: string[] = [];
+    await executeSubmitCommand({
+      repoPath: dir,
+      author: ["you@example.com"],
+      yes: true,
+      confirmUpload: true,
+      label: "acme-backend",
+      toolVersion: "0.1.0",
+      configDir,
+      log: (m) => logs.push(m),
+      warn: (m) => warnings.push(m),
+      isTTY: true,
+      checkForUpdateFn: noCheckForUpdate,
+    });
+
+    const noticeIndex = warnings.findIndex((w) => w.includes("very little history"));
+    expect(noticeIndex).toBeGreaterThanOrEqual(0);
+    expect(warnings[noticeIndex]).not.toContain("shallow");
+    // Printed before the consent box (TTY-only output) — the consent box
+    // itself is `log()`-ed, so ordering is checked against when it appears.
+    expect(logs.some((l) => l.includes("WHAT GETS UPLOADED"))).toBe(true);
+    // Never blocking: the upload still happened.
+    expect(bundleRequests(server)).toHaveLength(1);
+  });
+
+  it("warns about a truncated (shallow) clone instead, and still uploads, never blocking", async () => {
+    const server = await startMockServer((req) => {
+      if (req.url === "/api/cli/bundles") return { status: 200, body: { id: "ok" } };
+      return { status: 404, body: {} };
+    });
+    servers.push(server);
+    process.env.REDENTIAL_SITE_URL = server.url;
+
+    const source = createRepo();
+    dirs.push(source);
+    commit(source, {
+      message: "first",
+      authorName: "You",
+      authorEmail: "you@example.com",
+      files: { "a.ts": "1\n" },
+    });
+    commit(source, {
+      message: "second",
+      authorName: "You",
+      authorEmail: "you@example.com",
+      files: { "a.ts": "2\n" },
+    });
+    const dir = createShallowClone(source);
+    dirs.push(dir);
+
+    const configDir = tempConfigDir();
+    saveCredentials({ access_token: "t", site_url: server.url, obtained_at: "now" }, configDir);
+
+    const warnings: string[] = [];
+    await executeSubmitCommand({
+      repoPath: dir,
+      author: ["you@example.com"],
+      yes: true,
+      confirmUpload: true,
+      label: "acme-backend",
+      toolVersion: "0.1.0",
+      configDir,
+      log: () => {},
+      warn: (m) => warnings.push(m),
+      isTTY: false,
+      checkForUpdateFn: noCheckForUpdate,
+    });
+
+    expect(warnings.some((w) => w.includes("truncated (shallow) clone"))).toBe(true);
+    expect(warnings.some((w) => w.includes("git fetch --unshallow"))).toBe(true);
+    expect(bundleRequests(server)).toHaveLength(1);
   });
 });

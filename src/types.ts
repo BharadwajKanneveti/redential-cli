@@ -17,6 +17,11 @@ export interface RepoInfo {
   host_type: "github" | "gitlab" | "bitbucket" | "other" | "none";
   age_days: number;
   repo_fingerprint: string;
+  // Optional (schema 1.4.0+, see docs/schema.md). Present with value `true`
+  // ONLY when the scanned clone is shallow (`git rev-parse
+  // --is-shallow-repository`); absent — never `false` — for an ordinary
+  // full clone.
+  shallow?: boolean;
 }
 
 export interface IdentityInfo {
@@ -90,7 +95,7 @@ export interface AttestationInfo {
 }
 
 export interface Bundle {
-  schema_version: "1.3.0";
+  schema_version: "1.4.0";
   runner: "local" | "ci";
   tool_version: string;
   created_at: string;

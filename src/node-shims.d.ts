@@ -9,6 +9,10 @@ declare var process: {
   exitCode: number | undefined;
   env: Record<string, string | undefined>;
   platform: string;
+  // `process.version`'s own "v20.11.0"-shaped string — cli.ts's startup
+  // Node-version gate (src/node-version.ts) reads this before any
+  // version-sensitive module is loaded.
+  version: string;
   stdin: unknown;
   stdout: { isTTY?: boolean };
   stderr: { isTTY?: boolean; write(chunk: string): boolean };

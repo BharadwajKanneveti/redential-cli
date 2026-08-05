@@ -367,9 +367,9 @@ function capabilitiesSection(bundle: Bundle, theme: Theme): string[] {
   const skills = bundle.detected_skills;
   if (skills.length === 0) {
     return [
-      `  ${colors.DIM}No capabilities detected yet — signature matching covers 100+`,
-      `  technologies (auth, payments, AI, infra, and more). Keep`,
-      `  committing and rerun \`redential scan\`.${colors.RESET}`,
+      `  ${colors.DIM}No signatures matched. Detection only covers technologies already in`,
+      `  the public taxonomy (taxonomy.json) — if your stack isn't listed yet,`,
+      `  propose adding it: github.com/Redential/redential-cli.${colors.RESET}`,
     ];
   }
 

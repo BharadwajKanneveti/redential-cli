@@ -2,12 +2,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cleanup, commit, createRepo, setupSshSigning } from "./support/fixtures.js";
+import { cleanup, commit, createRepo, setRemote, setupSshSigning } from "./support/fixtures.js";
 import { validateAgainstSchema } from "./support/schema-validate.js";
 import { executeScanCommand } from "../src/scan-command.js";
 import { saveCredentials } from "../src/credentials.js";
 import { bundleContentHash, saveLastSubmission } from "../src/submission-record.js";
 import { getSiteUrl } from "../src/config.js";
+import { ScanError } from "../src/errors.js";
 
 const schema = JSON.parse(
   readFileSync(new URL("../schema/bundle.v1.json", import.meta.url), "utf8")
@@ -568,6 +569,81 @@ describe("executeScanCommand", () => {
       });
 
       expect(logs[0]).not.toContain("last ");
+    });
+  });
+
+  describe("--repo pointing at a non-git directory", () => {
+    it("rejects with a clean ScanError instead of the raw git-log Error", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "redential-not-a-repo-"));
+      dirs.push(dir);
+
+      const logs: string[] = [];
+      const rejection = executeScanCommand({
+        repoPath: dir,
+        author: ["you@example.com"],
+        yes: true,
+        toolVersion: "test",
+        configDir: tempConfigDir(),
+        log: (m) => logs.push(m),
+      });
+
+      await expect(rejection).rejects.toBeInstanceOf(ScanError);
+      await expect(rejection).rejects.toThrow(`Not a git repository: ${dir}`);
+      // Never the raw "git log failed (exit 128): fatal: ..." message this
+      // used to surface as an uncaught Error before the fix.
+      await expect(rejection).rejects.not.toThrow(/git log failed/);
+      expect(logs).toHaveLength(0);
+    });
+  });
+
+  describe("local-only notice", () => {
+    it("prints the local-only notice to stderr (via warn), on both piped and TTY runs, and stdout stays untouched", async () => {
+      const dir = repoWithOneCommit();
+      const logs: string[] = [];
+      const warnings: string[] = [];
+      await executeScanCommand({
+        repoPath: dir,
+        author: ["you@example.com"],
+        yes: true,
+        toolVersion: "test",
+        configDir: tempConfigDir(),
+        log: (m) => logs.push(m),
+        warn: (m) => warnings.push(m),
+      });
+
+      expect(warnings.some((w) => w.includes("This scan runs 100% locally."))).toBe(true);
+      expect(warnings.some((w) => w.includes("`redential submit`"))).toBe(true);
+      // stdout is still exactly the raw bundle JSON, nothing else.
+      expect(logs).toHaveLength(1);
+      expect(() => JSON.parse(logs[0])).not.toThrow();
+    });
+
+    it("prints before the connectable-repo guardrail notice, when both fire", async () => {
+      const dir = createRepo();
+      dirs.push(dir);
+      setRemote(dir, "https://github.com/acme/example.git");
+      commit(dir, {
+        message: "x",
+        authorName: "You",
+        authorEmail: "you@example.com",
+        files: { "a.ts": "1\n" },
+      });
+
+      const warnings: string[] = [];
+      await executeScanCommand({
+        repoPath: dir,
+        author: ["you@example.com"],
+        yes: true,
+        toolVersion: "test",
+        configDir: tempConfigDir(),
+        log: () => {},
+        warn: (m) => warnings.push(m),
+      });
+
+      const localOnlyIndex = warnings.findIndex((w) => w.includes("This scan runs 100% locally."));
+      const guardrailIndex = warnings.findIndex((w) => w.includes("appears connectable"));
+      expect(localOnlyIndex).toBeGreaterThanOrEqual(0);
+      expect(guardrailIndex).toBeGreaterThan(localOnlyIndex);
     });
   });
 });

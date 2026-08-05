@@ -84,8 +84,23 @@ export interface BuildBundleOptions {
  * non-TTY/piped one, which never asks that question at all) still always
  * returns a `Bundle`.
  */
+// Printed before anything else in the flow below — including the
+// connectable-repo guardrail's own notice/prompt — so a user never has to
+// answer any prompt before being told this scan makes zero network calls.
+// stderr-only (via `warn`, same channel every other non-blocking notice in
+// this file uses), in every mode (TTY and piped/non-TTY): this keeps the
+// piped bundle JSON on stdout byte-identical to every prior release (see
+// test/privacy/debug-output.test.ts's stdout-purity test, which the same
+// discipline applies to here). `submit` reaches this line too, since it
+// calls buildBundleInteractively directly — seeing it again there is fine
+// and desirable, not a bug.
+const LOCAL_ONLY_NOTICE =
+  "This scan runs 100% locally. Nothing is read from the network, nothing leaves your machine " +
+  "until you explicitly run `redential submit`.";
+
 export async function buildBundleInteractively(opts: BuildBundleOptions): Promise<Bundle | null> {
   const warn = opts.warn ?? console.error;
+  warn(LOCAL_ONLY_NOTICE);
 
   const publicHostNote = publicHostWarning(getRemoteUrl(opts.repoPath));
   if (publicHostNote) {

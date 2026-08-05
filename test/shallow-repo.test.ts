@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { shallowRepoWarning } from "../src/shallow-repo.js";
 import { executeScanCommand } from "../src/scan-command.js";
+import { runScan } from "../src/scan.js";
 import { cleanup, commit, createRepo, createShallowClone } from "./support/fixtures.js";
+import { validateAgainstSchema } from "./support/schema-validate.js";
+
+const schema = JSON.parse(
+  readFileSync(new URL("../schema/bundle.v1.json", import.meta.url), "utf8")
+);
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -72,7 +78,10 @@ describe("scan continues after a shallow-clone warning (never blocks)", () => {
       warn: (message) => warnings.push(message),
     });
 
-    expect(warnings).toEqual([]);
+    // The always-on local-only notice (build-bundle.ts) still fires on
+    // every scan — only the shallow-clone-specific warning is expected to
+    // be absent here.
+    expect(warnings.some((line) => line.includes("shallow clone"))).toBe(false);
   });
 
   it("the wrapped summary (TTY) notes the shallow clone", async () => {
@@ -120,5 +129,46 @@ describe("scan continues after a shallow-clone warning (never blocks)", () => {
     });
 
     expect(logs[0]).not.toContain("shallow clone");
+  });
+});
+
+describe("bundle.repo.shallow (schema 1.4.0)", () => {
+  it("is true, and the bundle validates, for a scan of a shallow clone", async () => {
+    const source = createRepo();
+    dirs.push(source);
+    commit(source, { message: "1", authorName: "You", authorEmail: "you@example.com", files: { "a.ts": "1\n" } });
+    commit(source, { message: "2", authorName: "You", authorEmail: "you@example.com", files: { "a.ts": "2\n" } });
+    const shallow = createShallowClone(source);
+    dirs.push(shallow);
+    const configDir = tempConfigDir();
+
+    const bundle = await runScan({
+      repoPath: shallow,
+      authors: ["you@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.repo.shallow).toBe(true);
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });
+
+  it("is absent (not `false`, not a key at all) for a scan of an ordinary full clone", async () => {
+    const dir = createRepo();
+    dirs.push(dir);
+    commit(dir, { message: "x", authorName: "You", authorEmail: "you@example.com", files: { "a.ts": "1\n" } });
+    const configDir = tempConfigDir();
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["you@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect("shallow" in bundle.repo).toBe(false);
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
   });
 });

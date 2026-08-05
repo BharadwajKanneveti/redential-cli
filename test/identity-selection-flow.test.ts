@@ -240,8 +240,11 @@ describe("identity-selection memory in buildBundleInteractively", () => {
       },
     });
 
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toBe(
+    // The always-on local-only notice (build-bundle.ts) fires first, on
+    // every scan — the saved-identity-selection notice is the second and
+    // only other one expected here.
+    expect(warnings).toHaveLength(2);
+    expect(warnings[1]).toBe(
       "Using saved identity selection: alice@example.com (docs/identity-selection-memory.md)."
     );
 

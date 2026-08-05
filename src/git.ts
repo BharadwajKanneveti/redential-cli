@@ -1,5 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { debugLog } from "./debug.js";
+import { ScanError } from "./errors.js";
 import type { RepoInfo } from "./types.js";
 
 export interface FileChurn {
@@ -50,6 +51,32 @@ const FIELD_SEP = "\x02";
 // different silently-wrong "no commits" result. Matched on stderr, not
 // exit code alone, since both cases exit 128.
 const EMPTY_REPO_PATTERN = /does not have any commits yet|bad default revision/;
+
+// `--repo <path>` pointing at a directory git doesn't consider a
+// repository at all (no `.git`, wrong path, etc.) — a completely different
+// problem from EMPTY_REPO_PATTERN's "valid repo, zero commits" case, and
+// one the user can actually fix (pass the right path). Matched on stderr
+// text since git reports it via the same exit 128 as every other fatal
+// git-log failure.
+const NOT_A_GIT_REPO_PATTERN = /not a git repository/;
+
+/**
+ * Turns a failed git subprocess's stderr into the Error a caller should
+ * reject/throw with. A "not a git repository" failure becomes a ScanError
+ * with an actionable, user-facing message (so program.ts's top-level
+ * handler prints a clean one-line message instead of an uncaught stack
+ * trace); every other failure keeps the existing generic Error shape,
+ * unchanged, since it isn't a case this function has an actionable message
+ * for.
+ */
+function gitFailureError(repoPath: string, command: string, code: number | null, stderr: string): Error {
+  if (NOT_A_GIT_REPO_PATTERN.test(stderr)) {
+    return new ScanError(
+      `Not a git repository: ${repoPath}. Run redential scan from inside a git repository, or pass --repo <path-to-repo>.`
+    );
+  }
+  return new Error(`${command} failed (exit ${code}): ${stderr.trim() || "unknown error"}`);
+}
 
 function parseCommitRecord(record: string): RawCommit {
   const lines = record.split("\n");
@@ -263,7 +290,7 @@ export function getAllCommits(repoPath: string, opts: GetAllCommitsOptions = {})
         if (EMPTY_REPO_PATTERN.test(stderr)) {
           resolve([]);
         } else {
-          reject(new Error(`git log failed (exit ${code}): ${stderr.trim() || "unknown error"}`));
+          reject(gitFailureError(repoPath, "git log", code, stderr));
         }
         return;
       }
@@ -614,7 +641,7 @@ export function listHeadTreeBlobs(repoPath: string): Promise<HeadTreeEntry[]> {
         if (EMPTY_REPO_TREE_PATTERN.test(stderr)) {
           resolve([]);
         } else {
-          reject(new Error(`git ls-tree failed (exit ${code}): ${stderr.trim() || "unknown error"}`));
+          reject(gitFailureError(repoPath, "git ls-tree", code, stderr));
         }
         return;
       }

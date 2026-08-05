@@ -9,7 +9,7 @@ false` everywhere — unknown fields are invalid by design).
 
 | Field | What | Why |
 |---|---|---|
-| `schema_version` | `"1.3.0"` | The schema is the trust contract; the version pins it |
+| `schema_version` | `"1.4.0"` | The schema is the trust contract; the version pins it |
 | `runner` | `local` \| `ci` | Local scans are user-controlled (weakest tier). CI scans (future) run in employer infrastructure and can carry an OIDC anchor |
 | `tool_version` | CLI version | Reproducibility of the analysis |
 | `created_at` | Scan timestamp | Freshness |
@@ -48,6 +48,22 @@ what does NOT carry over is validating a `1.3.0` bundle against a
 validator pinned to the literal `1.2.0` schema: `schema_version` is a
 JSON Schema `const`, rejected on the version string alone, by design.
 
+### Version note (1.3.0 → 1.4.0)
+
+`1.4.0` adds one optional field, `repo.shallow` (see [`repo`](#repo)
+below): a boolean, present with value `true` ONLY when the scanned clone
+is shallow, absent — never `false` — for an ordinary full clone. It
+carries zero employer information; it exists so a verifier can tell a
+genuinely short history apart from a history that's merely truncated by
+`git clone --depth N` (or a CI checkout action that defaults to one),
+which would otherwise silently understate `age_days`, `commits.span_days`,
+and commit counts with no indication why. Purely additive, same
+backward-compatibility shape as the 1.2.0 and 1.3.0 bumps above: a 1.4.0
+bundle from a full clone (the field absent) is indistinguishable from a
+pre-1.4.0 bundle on this field, and a `1.4.0`-pinned validator still
+rejects a `1.3.0` (or earlier) bundle on `schema_version` alone, by
+design.
+
 ## `repo`
 
 - `host_type` — only the KIND of host ("github"). Never the URL, org, or
@@ -60,6 +76,15 @@ JSON Schema `const`, rejected on the version string alone, by design.
 - `repo_fingerprint` — salted hash of the root commit sha. The server can
   detect the same repo being re-submitted (consistency) without ever knowing
   which repo it is. Also always the true root, unaffected by `--since`.
+- `shallow` — optional (since schema 1.4.0). `true` ONLY when the scanned
+  clone is shallow (`git rev-parse --is-shallow-repository`, same
+  detection `scan` already uses for its stderr warning — see
+  [shallow-repo.ts](../src/shallow-repo.ts)); the key is entirely absent
+  for an ordinary full clone, never present as `false`. A single boolean
+  carrying zero employer information, added so a verifier can distinguish
+  "this history is genuinely short" from "this clone is truncated" —
+  `age_days`/`commits.span_days`/commit counts on a shallow clone all
+  understate real activity with no other indication why.
 
 ## `identity`
 
