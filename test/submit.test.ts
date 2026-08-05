@@ -1022,7 +1022,13 @@ describe("executeSubmitCommand — private label", { timeout: 30_000 }, () => {
   });
 });
 
-describe("submit's thin-history / shallow-clone advisory (non-blocking)", () => {
+// Timeout matches this file's other describe blocks around slow fixture
+// work (e.g. "executeSubmitCommand" above) — the shallow-clone fixture below
+// does real git work (`git clone --depth 1` over `file://`), which can run
+// past vitest's 5s default on resource-constrained CI runners (observed:
+// windows-latest/Node 22 timing out around 8s; windows/Node 20 passed but at
+// the edge). 30s gives comfortable headroom without weakening any assertion.
+describe("submit's thin-history / shallow-clone advisory (non-blocking)", { timeout: 30_000 }, () => {
   it("warns about weak history for a repo with a single commit, printed before the consent box, and still uploads", async () => {
     const server = await startMockServer((req) => {
       if (req.url === "/api/cli/bundles") return { status: 200, body: { id: "ok" } };
