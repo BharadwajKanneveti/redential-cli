@@ -281,6 +281,7 @@ describe("runScan", () => {
       },
     });
 
+
     const bundle = await runScan({
       repoPath: dir,
       authors: ["ivy@example.com"],
@@ -297,6 +298,171 @@ describe("runScan", () => {
         last_seen: bundle.commits.first_at,
       },
     ]);
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });
+  
+  it("detects newly added package.json dependencies by comparing parent and child manifests", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add package.json",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      files: {
+        "package.json": [
+          "{",
+          '  "dependencies": {}',
+          "}",
+        ].join("\n"),
+      },
+    });
+
+    commit(dir, {
+      message: "add stripe dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      files: {
+        "package.json": [
+          "{",
+          '  "dependencies": {',
+          '    "stripe": "^16.0.0"',
+          "  }",
+          "}",
+        ].join("\n"),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "payments/stripe",
+        commit_count: 1,
+        first_seen: bundle.commits.first_at,
+        last_seen: bundle.commits.first_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });
+
+
+  it("detects newly added Cargo.toml dependencies by comparing parent and child manifests", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add Cargo.toml",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      files: {
+        "Cargo.toml": [
+          "[package]",
+          'name = "demo"',
+          'version = "0.1.0"',
+          "",
+          "[dependencies]",
+        ].join("\n"),
+      },
+    });
+
+    commit(dir, {
+      message: "add tokio dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      files: {
+        "Cargo.toml": [
+          "[package]",
+          'name = "demo"',
+          'version = "0.1.0"',
+          "",
+          "[dependencies]",
+          'tokio = "1.0"',
+        ].join("\n"),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "backend/tokio",
+        commit_count: 1,
+        first_seen: bundle.commits.first_at,
+        last_seen: bundle.commits.first_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });
+
+
+  it("detects newly added composer.json dependencies by comparing parent and child manifests", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add composer.json",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      files: {
+        "composer.json": JSON.stringify(
+          {
+            require: {},
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    commit(dir, {
+      message: "add laravel dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      files: {
+        "composer.json": JSON.stringify(
+          {
+            require: {
+              "laravel/framework": "^11.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "backend/laravel",
+        commit_count: 1,
+        first_seen: bundle.commits.first_at,
+        last_seen: bundle.commits.first_at,
+      },
+    ]);
+
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
   });
 

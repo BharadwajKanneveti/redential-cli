@@ -134,6 +134,15 @@ always bump at least minor; breaking schema changes bump major.
 
 ## [0.8.0] - 2026-08-02
 
+### Fixed
+- Fix manifest dependency detection for existing dependency blocks in
+  `package.json`, `composer.json`, and `Cargo.toml`. Manifest matching now
+  compares parent and child revision snapshots instead of relying only on
+  added diff lines, so dependencies added inside existing blocks are detected
+  correctly while existing dependencies and version-only changes are ignored.
+- Update manifest detection documentation to remove the previous documented
+  miss for dependency additions inside existing sections.
+
 ### Added
 - Add Tier 2 CircleCI detection (`infra/circleci`) for `.circleci/config.yml`, with positive and near-miss fixtures (#24).
 - Add `infra/circleci` to the closed skill taxonomy (#24).

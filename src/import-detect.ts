@@ -521,6 +521,36 @@ function extractSwift(text: string, filePath: string): string[] {
   return isPackageSwiftManifest(filePath) ? extractPackageSwiftDependencies(text) : extractSwiftImport(text);
 }
 
+/**
+ * Extracts dependency names from supported manifest formats.
+ *
+ * This function intentionally dispatches to format-specific extractors rather
+ * than attempting generic manifest parsing. Each ecosystem has different
+ * dependency semantics:
+ *
+ * - package.json: dependencies/devDependencies/peerDependencies
+ * - Cargo.toml: Cargo dependency sections
+ * - composer.json: PHP require block
+ *
+ * Unknown manifest types return an empty list rather than attempting a best
+ * effort guess. Detection prefers bounded false negatives over unsafe
+ * attribution.
+ */
+function parseManifestDependencies(text: string, filePath: string): string[] {
+  if(/package\.json$/i.test(filePath)) {
+    return extractPackageJson(text);
+  }
+  if(/cargo\.toml$/i.test(filePath)) {
+    return extractCargoToml(text);
+  }
+  if(/composer\.json$/i.test(filePath)) {
+    return extractPhp(text,filePath);
+  }
+  
+  return [];
+  
+}
+
 /** Tier 2 import/api pattern matching: block comments + whole comment lines only.
  *  Deliberately does NOT blank template literals or string contents — apiPatterns
  *  key on quoted API shapes and template-literal URLs (e.g. auth/oauth-oidc). */
@@ -576,4 +606,35 @@ export function extractImportedPackages(addedLines: string, filePath: string): s
     case "swift":
       return extractSwift(text, filePath);
   }
+}
+
+/**
+ * Returns dependencies that were newly introduced by comparing a manifest's
+ * parent and child snapshots.
+ *
+ * Manifest files cannot reliably be analyzed from added diff lines alone:
+ * dependency entries often appear inside an already-existing dependency block
+ * whose header is not part of the diff context. Comparing complete manifests
+ * avoids attributing unchanged dependencies as newly added evidence.
+ *
+ * Version-only changes are intentionally ignored because the dependency key
+ * already existed in the parent manifest. A newly created manifest has no
+ * parent snapshot, so all detected dependencies are treated as additions.
+ *
+ * The comparison is performed locally from git blob contents; no network or
+ * external resolution is involved. The returned values are package names that
+ * are later resolved against the closed signature package map.
+ */
+export function extractAddedManifestDependencies(
+  parentText: string | undefined,
+  childText: string,
+  filePath: string
+): string[] {
+
+  const childDeps = parseManifestDependencies(childText, filePath);
+  if (!parentText) {
+    return childDeps;
+  }
+  const parentDeps = parseManifestDependencies(parentText, filePath);
+  return childDeps.filter(dep => !parentDeps.includes(dep));
 }

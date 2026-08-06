@@ -11,6 +11,7 @@ export interface FileChurn {
 
 export interface RawCommit {
   sha: string;
+  parentSha: string;
   email: string;
   authorDate: Date;
   // Distinct from authorDate: the date the commit object was actually
@@ -107,6 +108,7 @@ function parseCommitRecord(record: string): RawCommit {
     signed: signatureStatus === "G",
     churn,
     isMerge: parents.trim().split(/\s+/).filter(Boolean).length > 1,
+    parentSha: parents.trim().split(/\s+/).filter(Boolean)[0],
   };
 }
 
@@ -660,6 +662,18 @@ export function listHeadTreeBlobs(repoPath: string): Promise<HeadTreeEntry[]> {
  * getCommitsAddedLines/skill-detect.ts's DIFF_BATCH_SIZE split, so at most
  * one batch's worth of file content is ever held in memory at once.
  *
+ * Although this helper was originally introduced for HEAD snapshot reads,
+ * it now accepts any git revision. HEAD is simply the current checked-out
+ * revision; callers may also provide historical commit SHAs, such as a
+ * commit being analyzed and its parent commit. This allows callers like
+ * skill detection to compare two repository states:
+ *
+ *   parent revision -> child revision
+ *
+ * instead of relying only on partial diff lines. This is required for
+ * manifest dependency detection, where the full before/after file contents
+ * are needed to identify newly added dependencies safely.
+ *
  * `--batch` was chosen over N calls to `git show HEAD:path` (one process
  * per file — exactly the cost this exists to avoid) or one `git show`
  * given many `HEAD:path` args back to back (which does concatenate blob
@@ -680,7 +694,7 @@ export function listHeadTreeBlobs(repoPath: string): Promise<HeadTreeEntry[]> {
  * matching getCommitsAddedLines' fail-quiet-to-partial-data behavior — a
  * missing snapshot file is not a privacy problem, only a completeness one.
  */
-export function readHeadBlobContents(repoPath: string, paths: string[]): Promise<Map<string, string>> {
+export function readBlobContents(repoPath: string, revision: string, paths: string[]): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   if (paths.length === 0) return Promise.resolve(result);
 
@@ -733,7 +747,7 @@ export function readHeadBlobContents(repoPath: string, paths: string[]): Promise
     child.on("error", () => resolve(result));
     child.on("close", () => resolve(result));
 
-    child.stdin!.write(paths.map((p) => `HEAD:${p}\n`).join(""));
+    child.stdin!.write(paths.map((p) => `${revision}:${p}\n`).join(""));
     child.stdin!.end();
   });
 }

@@ -3,10 +3,12 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { getCommitsAddedLines, type RawCommit } from "./git.js";
 import { isExcludedPath, heuristicallyGeneratedPaths } from "./churn-exclusions.js";
-import { extractImportedPackages, sanitizeForPatternMatching } from "./import-detect.js";
+import { extractImportedPackages, sanitizeForPatternMatching, extractAddedManifestDependencies } from "./import-detect.js";
 import { ScanError } from "./errors.js";
 import { debugLog } from "./debug.js";
 import type { DetectedSkill } from "./types.js";
+import { readBlobContents } from "./git.js";
+import { execFileSync } from "node:child_process";
 
 export interface FixtureCase {
   path: string;
@@ -29,6 +31,14 @@ interface CompiledSignature {
   importRegexes: RegExp[];
   apiRegexes: RegExp[];
   configFileRegexes: RegExp[];
+}
+
+function needsFullFileContent(filePath: string): boolean {
+  return (
+    /package\.json$/i.test(filePath) ||
+    /composer\.json$/i.test(filePath) ||
+    /cargo\.toml$/i.test(filePath)
+  );
 }
 
 // Default locations ship alongside dist/ in the published package (see
@@ -271,11 +281,47 @@ export async function detectSkills(
       );
       if (files.length === 0) continue;
 
+      const manifestPaths = files
+        .filter((f) => needsFullFileContent(f.path))
+        .map((f) => f.path);
+
+      // Manifest detection compares the complete file state before and after
+      // the commit. This avoids relying on partial diff lines where dependency
+      // block headers may not be included.
+      const childContentByPath =
+        manifestPaths.length > 0
+          ? await readBlobContents(repoPath, commit.sha, manifestPaths)
+          : new Map<string, string>();
+      
+      const parentContentByPath =
+        manifestPaths.length > 0
+          ? await readBlobContents(repoPath, commit.parentSha, manifestPaths)
+          : new Map<string, string>();    
+
       for (const file of files) {
-        // Tier 1: generic import detection against the flat package map.
-        for (const pkg of extractImportedPackages(file.addedLines, file.path)) {
-          const slug = packageMap.get(pkg);
-          if (slug) recordMatch(slug, commit);
+        const addedLines = file.addedLines;
+         if (needsFullFileContent(file.path)) {
+          // Compare parent and child manifests to find newly introduced
+          // dependencies.
+          const parentText = parentContentByPath.get(file.path);
+          const childText = childContentByPath.get(file.path);
+          if (childText == undefined) {
+            continue;
+          }
+          for (const pkg of extractAddedManifestDependencies(
+            parentText,
+            childText,
+            file.path
+          )) {
+            const slug = packageMap.get(pkg);
+            if (slug) recordMatch(slug, commit);
+          }
+        } else {
+           // Tier 1: generic import detection against the flat package map.
+          for (const pkg of extractImportedPackages(addedLines, file.path)) {
+            const slug = packageMap.get(pkg);
+            if (slug) recordMatch(slug, commit);
+          }
         }
       }
       // Tier 2: config-file/API-usage signatures.
