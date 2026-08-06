@@ -458,8 +458,8 @@ describe("runScan", () => {
       {
         slug: "backend/laravel",
         commit_count: 1,
-        first_seen: bundle.commits.first_at,
-        last_seen: bundle.commits.first_at,
+        first_seen: bundle.commits.last_at,
+        last_seen: bundle.commits.last_at,
       },
     ]);
 
