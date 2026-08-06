@@ -345,8 +345,8 @@ describe("runScan", () => {
       {
         slug: "payments/stripe",
         commit_count: 1,
-        first_seen: bundle.commits.first_at,
-        last_seen: bundle.commits.first_at,
+        first_seen: bundle.commits.last_at,
+        last_seen: bundle.commits.last_at,
       },
     ]);
 
@@ -401,8 +401,8 @@ describe("runScan", () => {
       {
         slug: "backend/tokio",
         commit_count: 1,
-        first_seen: bundle.commits.first_at,
-        last_seen: bundle.commits.first_at,
+        first_seen: bundle.commits.last_at,
+        last_seen: bundle.commits.last_at,
       },
     ]);
 
