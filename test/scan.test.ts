@@ -281,7 +281,6 @@ describe("runScan", () => {
       },
     });
 
-
     const bundle = await runScan({
       repoPath: dir,
       authors: ["ivy@example.com"],
@@ -378,7 +377,7 @@ describe("runScan", () => {
       authorEmail: "ivy@example.com",
       authorDate: "2026-01-02T10:00:00Z",
       files: {
-       "package.json": [
+        "package.json": [
           "{",
           '  "dependencies": {',
           '    "stripe": "^16.0.0",',
@@ -398,23 +397,23 @@ describe("runScan", () => {
     });
 
     expect(bundle.detected_skills).toEqual([
-    {
-      slug: "frontend/react",
-      commit_count: 1,
-      first_seen: bundle.commits.last_at,
-      last_seen: bundle.commits.last_at,
-    },
-    {
-      slug: "payments/stripe",
-      commit_count: 1,
-      first_seen: bundle.commits.first_at,
-      last_seen: bundle.commits.first_at,
-    },
-  ]);
+      {
+        slug: "frontend/react",
+        commit_count: 1,
+        first_seen: bundle.commits.last_at,
+        last_seen: bundle.commits.last_at,
+      },
+      {
+        slug: "payments/stripe",
+        commit_count: 1,
+        first_seen: bundle.commits.first_at,
+        last_seen: bundle.commits.first_at,
+      },
+    ]);
 
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
-  });  
-    
+  });
+
   it("detects newly added package.json dependencies by comparing parent and child manifests", async () => {
     const dir = repo();
     const configDir = tempConfigDir();
@@ -631,7 +630,7 @@ describe("runScan", () => {
     ]);
 
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
-  });  
+  });
 
 
   it("detects newly added Cargo.toml dependencies by comparing parent and child manifests", async () => {
@@ -747,7 +746,7 @@ describe("runScan", () => {
     ]);
 
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
-  });  
+  });
 
   it("detects newly added Cargo.toml dependency blocks", async () => {
     const dir = repo();
@@ -813,7 +812,7 @@ describe("runScan", () => {
       message: "add Cargo.toml with tokio",
       authorName: "Ivy",
       authorEmail: "ivy@example.com",
-      authorDate: "2026-01-01T10:00:00Z", 
+      authorDate: "2026-01-01T10:00:00Z",
       files: {
         "Cargo.toml": [
           "[package]",
@@ -844,7 +843,7 @@ describe("runScan", () => {
     ]);
 
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
-  });  
+  });
 
   it("detects newly added composer.json dependencies by comparing parent and child manifests", async () => {
     const dir = repo();
@@ -962,7 +961,7 @@ describe("runScan", () => {
     ]);
 
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
-  });  
+  });
 
   it("detects newly added composer.json dependency blocks", async () => {
     const dir = repo();
@@ -972,7 +971,7 @@ describe("runScan", () => {
       message: "add composer require block",
       authorName: "Ivy",
       authorEmail: "ivy@example.com",
-      authorDate: "2026-01-01T10:00:00Z", 
+      authorDate: "2026-01-01T10:00:00Z",
       files: {
         "composer.json": JSON.stringify(
           {},
@@ -986,7 +985,7 @@ describe("runScan", () => {
       message: "add laravel dependency",
       authorName: "Ivy",
       authorEmail: "ivy@example.com",
-      authorDate: "2026-01-02T10:00:00Z", 
+      authorDate: "2026-01-02T10:00:00Z",
       files: {
         "composer.json": JSON.stringify(
           {
@@ -1018,7 +1017,7 @@ describe("runScan", () => {
     ]);
 
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
-  }); 
+  });
 
   it("detects dependencies when composer.json is introduced", async () => {
     const dir = repo();
@@ -1060,7 +1059,7 @@ describe("runScan", () => {
     ]);
 
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
-  });  
+  });
 
   it("does not detect a skill from a merge commit or from prose merely mentioning a library", async () => {
     const dir = repo();

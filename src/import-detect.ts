@@ -569,9 +569,9 @@ function parseManifestDependencies(text: string, filePath: string): string[] | u
   if(/composer\.json$/i.test(filePath)) {
     return extractPhp(text,filePath);
   }
-  
+
   return [];
-  
+
 }
 
 /** Tier 2 import/api pattern matching: block comments + whole comment lines only.
