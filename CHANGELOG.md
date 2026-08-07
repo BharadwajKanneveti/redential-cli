@@ -9,7 +9,15 @@ always bump at least minor; breaking schema changes bump major.
 
 ### Fixed
 - Improve manifest dependency detection by comparing parent and child
-  snapshots, preventing false positives from dependency version changes.
+  revision snapshots instead of relying only on added diff lines. This now
+  correctly detects dependencies added inside existing blocks in
+  `package.json`, `composer.json`, and `Cargo.toml` while ignoring existing
+  dependencies and version-only changes.
+- Add safer manifest parsing behavior by failing closed when a child or parent
+  manifest cannot be parsed, preventing malformed files from causing
+  over-attribution of dependencies.
+- Batch manifest snapshot reads across commits to reduce repeated Git blob
+  lookups during dependency detection.
 
 
 ## [0.10.1] - 2026-08-07
@@ -139,15 +147,6 @@ always bump at least minor; breaking schema changes bump major.
   collapse").
 
 ## [0.8.0] - 2026-08-02
-
-### Fixed
-- Fix manifest dependency detection for existing dependency blocks in
-  `package.json`, `composer.json`, and `Cargo.toml`. Manifest matching now
-  compares parent and child revision snapshots instead of relying only on
-  added diff lines, so dependencies added inside existing blocks are detected
-  correctly while existing dependencies and version-only changes are ignored.
-- Update manifest detection documentation to remove the previous documented
-  miss for dependency additions inside existing sections.
 
 ### Added
 - Add Tier 2 CircleCI detection (`infra/circleci`) for `.circleci/config.yml`, with positive and near-miss fixtures (#24).

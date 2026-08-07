@@ -378,11 +378,11 @@ describe("runScan", () => {
       authorEmail: "ivy@example.com",
       authorDate: "2026-01-02T10:00:00Z",
       files: {
-        "package.json": [
+       "package.json": [
           "{",
           '  "dependencies": {',
           '    "stripe": "^16.0.0",',
-          '    "react": "^19.0.0",',
+          '    "react": "^19.0.0"',
           "  }",
           "}",
         ].join("\n"),
@@ -398,13 +398,19 @@ describe("runScan", () => {
     });
 
     expect(bundle.detected_skills).toEqual([
-      {
-        slug: "payments/stripe",
-        commit_count: 1,
-        first_seen: bundle.commits.first_at,
-        last_seen: bundle.commits.first_at,
-      },
-    ]);
+    {
+      slug: "frontend/react",
+      commit_count: 1,
+      first_seen: bundle.commits.last_at,
+      last_seen: bundle.commits.last_at,
+    },
+    {
+      slug: "payments/stripe",
+      commit_count: 1,
+      first_seen: bundle.commits.first_at,
+      last_seen: bundle.commits.first_at,
+    },
+  ]);
 
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
   });  
