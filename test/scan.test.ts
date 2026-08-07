@@ -300,7 +300,115 @@ describe("runScan", () => {
     ]);
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
   });
-  
+
+  it("does not detect dependencies when the parent package.json is malformed", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add malformed package.json",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
+      files: {
+        "package.json": [
+          "{",
+          '  "dependencies": {',
+          '    "stripe": "^15.0.0"',
+        ].join("\n"),
+      },
+    });
+
+    commit(dir, {
+      message: "add dependency to package.json",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
+      files: {
+        "package.json": JSON.stringify(
+          {
+            dependencies: {
+              stripe: "^16.0.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });
+
+  it("does not detect existing package.json dependencies when another dependency is added", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add stripe dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
+      files: {
+        "package.json": JSON.stringify(
+          {
+            dependencies: {
+              stripe: "^16.0.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    commit(dir, {
+      message: "add react dependency with formatting change",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
+      files: {
+        "package.json": [
+          "{",
+          '  "dependencies": {',
+          '    "stripe": "^16.0.0",',
+          '    "react": "^19.0.0",',
+          "  }",
+          "}",
+        ].join("\n"),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "payments/stripe",
+        commit_count: 1,
+        first_seen: bundle.commits.first_at,
+        last_seen: bundle.commits.first_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });  
+    
   it("detects newly added package.json dependencies by comparing parent and child manifests", async () => {
     const dir = repo();
     const configDir = tempConfigDir();
@@ -650,7 +758,6 @@ describe("runScan", () => {
           'name = "demo"',
           'version = "0.1.0"',
           "",
-          "[dependencies]",
         ].join("\n"),
       },
     });
@@ -862,9 +969,7 @@ describe("runScan", () => {
       authorDate: "2026-01-01T10:00:00Z", 
       files: {
         "composer.json": JSON.stringify(
-          {
-            require: {},
-          },
+          {},
           null,
           2
         ),

@@ -5,8 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: strict [semver](https://semver.org/) — bundle schema changes
 always bump at least minor; breaking schema changes bump major.
 
-## [0.10.1] - 2026-08-07
+## [Unreleased]
 
+### Fixed
+- Improve manifest dependency detection by comparing parent and child
+  snapshots, preventing false positives from dependency version changes.
+
+
+## [0.10.1] - 2026-08-07
 ### Added
 - Add `payments/braintree` to the closed skill taxonomy (#14).
 - Detect Braintree via `braintree`, `braintree-web`, and `braintree-web-drop-in` imports, mapped to `payments/braintree` (#14).

@@ -174,7 +174,7 @@ function extractJsImports(text: string): string[] {
 // declared in dependencies, devDependencies, and peerDependencies. Unlike
 // diff-line parsing, this uses JSON.parse so single-line dependency blocks
 // and formatting variations are handled correctly.
-function extractPackageJsonFromManifest(text: string): string[] {
+function extractPackageJsonFromManifest(text: string): string[] | undefined  {
   try {
     const parsed = JSON.parse(text) as {
       dependencies?: Record<string, string>;
@@ -188,7 +188,7 @@ function extractPackageJsonFromManifest(text: string): string[] {
       ...Object.keys(parsed.peerDependencies ?? {}),
     ];
   } catch {
-    return [];
+    return undefined;
   }
 }
 
@@ -314,7 +314,7 @@ function extractPhp(text: string, filePath: string): string[] | undefined {
       // A partial diff (added lines only) is rarely valid standalone JSON —
       // fall through to returning whatever we found (nothing), rather than
       // guessing at a malformed fragment.
-      return [];
+      return undefined;
     }
     return found;
   }
@@ -661,6 +661,10 @@ export function extractAddedManifestDependencies(
   // Root commit (or newly introduced manifest): attribute every dependency
   // present in the child snapshot.
   if (parentText === undefined) {
+    // Missing parent content can mean either a root/new manifest commit or a
+    // failed parent blob read. We cannot distinguish these cases here; treating
+    // it as a new manifest preserves existing fail-quiet behavior but may
+    // over-attribute dependencies in the rare git failure case.
     return childDeps;
   }
   const parentDeps = parseManifestDependencies(parentText, filePath);

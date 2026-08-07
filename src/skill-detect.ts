@@ -1,13 +1,13 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { getCommitsAddedLines, type RawCommit } from "./git.js";
+import { getCommitsAddedLines, type RawCommit, readBlobContents } from "./git.js";
 import { isExcludedPath, heuristicallyGeneratedPaths } from "./churn-exclusions.js";
 import { extractImportedPackages, sanitizeForPatternMatching, extractAddedManifestDependencies } from "./import-detect.js";
 import { ScanError } from "./errors.js";
 import { debugLog } from "./debug.js";
 import type { DetectedSkill } from "./types.js";
-import { readBlobContents } from "./git.js";
+
 
 export interface FixtureCase {
   path: string;
