@@ -170,6 +170,28 @@ function extractJsImports(text: string): string[] {
   return found;
 }
 
+// Parses a complete package.json manifest and returns the dependency names
+// declared in dependencies, devDependencies, and peerDependencies. Unlike
+// diff-line parsing, this uses JSON.parse so single-line dependency blocks
+// and formatting variations are handled correctly.
+function extractPackageJsonFromManifest(text: string): string[] {
+  try {
+    const parsed = JSON.parse(text) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    };
+
+    return [
+      ...Object.keys(parsed.dependencies ?? {}),
+      ...Object.keys(parsed.devDependencies ?? {}),
+      ...Object.keys(parsed.peerDependencies ?? {}),
+    ];
+  } catch {
+    return [];
+  }
+}
+
 const PACKAGE_JSON_DEPS_HEADER = /^"(dependencies|devDependencies|peerDependencies)"\s*:\s*\{$/;
 const PACKAGE_JSON_DEP_LINE = /^"([^"]+)"\s*:/;
 // package.json is parsed from added diff lines only. A dependency block
@@ -280,7 +302,7 @@ function extractRuby(text: string, filePath: string): string[] {
   return found;
 }
 
-function extractPhp(text: string, filePath: string): string[] {
+function extractPhp(text: string, filePath: string): string[] | undefined {
   const found: string[] = [];
   if (/composer\.json$/i.test(filePath)) {
     // Structured JSON — no regex needed, and safest possible source: no
@@ -292,6 +314,7 @@ function extractPhp(text: string, filePath: string): string[] {
       // A partial diff (added lines only) is rarely valid standalone JSON —
       // fall through to returning whatever we found (nothing), rather than
       // guessing at a malformed fragment.
+      return [];
     }
     return found;
   }
@@ -536,9 +559,9 @@ function extractSwift(text: string, filePath: string): string[] {
  * effort guess. Detection prefers bounded false negatives over unsafe
  * attribution.
  */
-function parseManifestDependencies(text: string, filePath: string): string[] {
+function parseManifestDependencies(text: string, filePath: string): string[] | undefined {
   if(/package\.json$/i.test(filePath)) {
-    return extractPackageJson(text);
+    return extractPackageJsonFromManifest(text);
   }
   if(/cargo\.toml$/i.test(filePath)) {
     return extractCargoToml(text);
@@ -570,7 +593,7 @@ export function sanitizeForPatternMatching(addedLines: string): string {
  * extension isn't recognized, or for excluded doc files (.md etc.) — never
  * throws.
  */
-export function extractImportedPackages(addedLines: string, filePath: string): string[] {
+export function extractImportedPackages(addedLines: string, filePath: string): string[]{
   const language = languageForPath(filePath);
   if (!language) return [];
   // composer.json (structured JSON) and Cargo.toml/.csproj (each parsed by
@@ -595,7 +618,7 @@ export function extractImportedPackages(addedLines: string, filePath: string): s
     case "ruby":
       return extractRuby(text, filePath);
     case "php":
-      return extractPhp(text, filePath);
+      return extractPhp(text, filePath)?? [];
     case "rust":
       return extractRust(text, filePath);
     case "java":
@@ -632,9 +655,19 @@ export function extractAddedManifestDependencies(
 ): string[] {
 
   const childDeps = parseManifestDependencies(childText, filePath);
-  if (!parentText) {
+  if (childDeps === undefined) {
+    return [];
+  }
+  // Root commit (or newly introduced manifest): attribute every dependency
+  // present in the child snapshot.
+  if (parentText === undefined) {
     return childDeps;
   }
   const parentDeps = parseManifestDependencies(parentText, filePath);
-  return childDeps.filter(dep => !parentDeps.includes(dep));
+  // If the parent manifest can't be parsed, fail closed rather than treating
+  // the child as a newly introduced manifest and over-attributing skills.
+  if (parentDeps === undefined) {
+    return [];
+  }
+  return childDeps.filter((dep) => !parentDeps.includes(dep));
 }

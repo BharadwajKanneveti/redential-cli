@@ -8,7 +8,6 @@ import { ScanError } from "./errors.js";
 import { debugLog } from "./debug.js";
 import type { DetectedSkill } from "./types.js";
 import { readBlobContents } from "./git.js";
-import { execFileSync } from "node:child_process";
 
 export interface FixtureCase {
   path: string;
@@ -275,37 +274,51 @@ export async function detectSkills(
       batch.map((c) => c.sha)
     );
 
+    const childRequests: { revision: string; path: string }[] = [];
+    const parentRequests: { revision: string; path: string }[] = [];
     for (const commit of batch) {
       const files = (addedLinesBySha.get(commit.sha) ?? []).filter(
         (f) => !isExcludedPath(f.path) && !generatedPaths.has(f.path)
       );
       if (files.length === 0) continue;
 
+      // Only manifest files require full-file snapshots. Source files continue to
+      // use added diff lines for import-based detection.
       const manifestPaths = files
         .filter((f) => needsFullFileContent(f.path))
         .map((f) => f.path);
 
-      // Manifest detection compares the complete file state before and after
-      // the commit. This avoids relying on partial diff lines where dependency
-      // block headers may not be included.
-      const childContentByPath =
-        manifestPaths.length > 0
-          ? await readBlobContents(repoPath, commit.sha, manifestPaths)
-          : new Map<string, string>();
-      
-      const parentContentByPath =
-        manifestPaths.length > 0
-          ? await readBlobContents(repoPath, commit.parentSha, manifestPaths)
-          : new Map<string, string>();    
+      for(const manifest of manifestPaths) {
+       // Queue both child and parent revisions. Root commits have no parent, so only
+       // the child snapshot is requested.
+       childRequests.push({ revision: commit.sha, path: manifest });
+       if (commit.parentSha !== undefined) {
+          parentRequests.push({ revision: commit.parentSha, path: manifest });
+        }
+      }
+    }
+    // Fetch all requested blobs in two batched git invocations rather than one
+    // process per file.
+    const childContentByRevision = await readBlobContents(repoPath, childRequests);
+    const parentContentByRevision = await readBlobContents(repoPath, parentRequests);
+
+    for (const commit of batch) {
+      const files = (addedLinesBySha.get(commit.sha) ?? []).filter(
+        (f) => !isExcludedPath(f.path) && !generatedPaths.has(f.path)
+      );
+      if (files.length === 0) continue;
 
       for (const file of files) {
         const addedLines = file.addedLines;
          if (needsFullFileContent(file.path)) {
-          // Compare parent and child manifests to find newly introduced
-          // dependencies.
-          const parentText = parentContentByPath.get(file.path);
-          const childText = childContentByPath.get(file.path);
-          if (childText == undefined) {
+          // Manifest files are compared as complete snapshots. This detects newly
+          // added dependencies while ignoring version bumps and avoiding diff-format
+          // edge cases.
+          const parentText =  commit.parentSha !== undefined
+          ? parentContentByRevision.get(commit.parentSha)?.get(file.path)
+          : undefined;
+          const childText = childContentByRevision.get(commit.sha)?.get(file.path);
+          if (childText === undefined) {
             continue;
           }
           for (const pkg of extractAddedManifestDependencies(

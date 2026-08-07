@@ -309,6 +309,7 @@ describe("runScan", () => {
       message: "add package.json",
       authorName: "Ivy",
       authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
       files: {
         "package.json": [
           "{",
@@ -322,6 +323,7 @@ describe("runScan", () => {
       message: "add stripe dependency",
       authorName: "Ivy",
       authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
       files: {
         "package.json": [
           "{",
@@ -353,6 +355,170 @@ describe("runScan", () => {
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
   });
 
+  it("detects newly added package.json dependency blocks", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add empty package.json",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
+      files: {
+        "package.json": JSON.stringify({}, null, 2),
+      },
+    });
+
+    commit(dir, {
+      message: "add stripe dependency block",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
+      files: {
+        "package.json": JSON.stringify(
+          {
+            dependencies: {
+              stripe: "^16.0.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "payments/stripe",
+        commit_count: 1,
+        first_seen: bundle.commits.last_at,
+        last_seen: bundle.commits.last_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });
+
+  it("does not detect package.json dependency version bumps", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add package.json",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
+      files: {
+        "package.json": JSON.stringify(
+          {
+            dependencies: {
+              stripe: "^15.0.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    commit(dir, {
+      message: "upgrade stripe dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
+      files: {
+        "package.json": JSON.stringify(
+          {
+            dependencies: {
+              stripe: "^16.0.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "payments/stripe",
+        commit_count: 1,
+        first_seen: bundle.commits.first_at,
+        last_seen: bundle.commits.first_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });
+
+  it("detects dependencies when package.json is introduced", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "initial source file",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
+      files: {
+        "index.js": "console.log('hello');",
+      },
+    });
+
+    commit(dir, {
+      message: "add package.json with stripe",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
+      files: {
+        "package.json": JSON.stringify(
+          {
+            dependencies: {
+              stripe: "^16.0.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "payments/stripe",
+        commit_count: 1,
+        first_seen: bundle.commits.last_at,
+        last_seen: bundle.commits.last_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });  
+
 
   it("detects newly added Cargo.toml dependencies by comparing parent and child manifests", async () => {
     const dir = repo();
@@ -362,6 +528,7 @@ describe("runScan", () => {
       message: "add Cargo.toml",
       authorName: "Ivy",
       authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
       files: {
         "Cargo.toml": [
           "[package]",
@@ -377,6 +544,7 @@ describe("runScan", () => {
       message: "add tokio dependency",
       authorName: "Ivy",
       authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
       files: {
         "Cargo.toml": [
           "[package]",
@@ -409,6 +577,161 @@ describe("runScan", () => {
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
   });
 
+  it("does not detect Cargo.toml dependency version bumps", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add tokio dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
+      files: {
+        "Cargo.toml": [
+          "[package]",
+          'name = "demo"',
+          'version = "0.1.0"',
+          "",
+          "[dependencies]",
+          'tokio = "1.0"',
+        ].join("\n"),
+      },
+    });
+
+    commit(dir, {
+      message: "upgrade tokio dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
+      files: {
+        "Cargo.toml": [
+          "[package]",
+          'name = "demo"',
+          'version = "0.1.0"',
+          "",
+          "[dependencies]",
+          'tokio = "1.1"',
+        ].join("\n"),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "backend/tokio",
+        commit_count: 1,
+        first_seen: bundle.commits.first_at,
+        last_seen: bundle.commits.first_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });  
+
+  it("detects newly added Cargo.toml dependency blocks", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add Cargo dependencies block",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
+      files: {
+        "Cargo.toml": [
+          "[package]",
+          'name = "demo"',
+          'version = "0.1.0"',
+          "",
+          "[dependencies]",
+        ].join("\n"),
+      },
+    });
+
+    commit(dir, {
+      message: "add tokio dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
+      files: {
+        "Cargo.toml": [
+          "[package]",
+          'name = "demo"',
+          'version = "0.1.0"',
+          "",
+          "[dependencies]",
+          'tokio = "1.0"',
+        ].join("\n"),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "backend/tokio",
+        commit_count: 1,
+        first_seen: bundle.commits.last_at,
+        last_seen: bundle.commits.last_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });
+
+  it("detects dependencies when Cargo.toml is introduced", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add Cargo.toml with tokio",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z", 
+      files: {
+        "Cargo.toml": [
+          "[package]",
+          'name = "demo"',
+          'version = "0.1.0"',
+          "",
+          "[dependencies]",
+          'tokio = "1.0"',
+        ].join("\n"),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "backend/tokio",
+        commit_count: 1,
+        first_seen: bundle.commits.last_at,
+        last_seen: bundle.commits.last_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });  
 
   it("detects newly added composer.json dependencies by comparing parent and child manifests", async () => {
     const dir = repo();
@@ -418,6 +741,7 @@ describe("runScan", () => {
       message: "add composer.json",
       authorName: "Ivy",
       authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
       files: {
         "composer.json": JSON.stringify(
           {
@@ -433,6 +757,7 @@ describe("runScan", () => {
       message: "add laravel dependency",
       authorName: "Ivy",
       authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
       files: {
         "composer.json": JSON.stringify(
           {
@@ -465,6 +790,166 @@ describe("runScan", () => {
 
     expect(validateAgainstSchema(schema, bundle)).toEqual([]);
   });
+
+  it("does not detect composer.json dependency version bumps", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add laravel dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
+      files: {
+        "composer.json": JSON.stringify(
+          {
+            require: {
+              "laravel/framework": "^10.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    commit(dir, {
+      message: "upgrade laravel dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z",
+      files: {
+        "composer.json": JSON.stringify(
+          {
+            require: {
+              "laravel/framework": "^11.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "backend/laravel",
+        commit_count: 1,
+        first_seen: bundle.commits.first_at,
+        last_seen: bundle.commits.first_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });  
+
+  it("detects newly added composer.json dependency blocks", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add composer require block",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z", 
+      files: {
+        "composer.json": JSON.stringify(
+          {
+            require: {},
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    commit(dir, {
+      message: "add laravel dependency",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-02T10:00:00Z", 
+      files: {
+        "composer.json": JSON.stringify(
+          {
+            require: {
+              "laravel/framework": "^11.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "backend/laravel",
+        commit_count: 1,
+        first_seen: bundle.commits.last_at,
+        last_seen: bundle.commits.last_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  }); 
+
+  it("detects dependencies when composer.json is introduced", async () => {
+    const dir = repo();
+    const configDir = tempConfigDir();
+
+    commit(dir, {
+      message: "add composer.json with laravel",
+      authorName: "Ivy",
+      authorEmail: "ivy@example.com",
+      authorDate: "2026-01-01T10:00:00Z",
+      files: {
+        "composer.json": JSON.stringify(
+          {
+            require: {
+              "laravel/framework": "^11.0",
+            },
+          },
+          null,
+          2
+        ),
+      },
+    });
+
+    const bundle = await runScan({
+      repoPath: dir,
+      authors: ["ivy@example.com"],
+      confirmed: true,
+      toolVersion: "0.1.0",
+      configDir,
+    });
+
+    expect(bundle.detected_skills).toEqual([
+      {
+        slug: "backend/laravel",
+        commit_count: 1,
+        first_seen: bundle.commits.last_at,
+        last_seen: bundle.commits.last_at,
+      },
+    ]);
+
+    expect(validateAgainstSchema(schema, bundle)).toEqual([]);
+  });  
 
   it("does not detect a skill from a merge commit or from prose merely mentioning a library", async () => {
     const dir = repo();

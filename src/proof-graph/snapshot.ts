@@ -165,17 +165,23 @@ export async function readHeadSnapshot(repoPath: string, opts: SnapshotOptions =
   const files: SnapshotFile[] = [];
   for (let i = 0; i < selectedPaths.length; i += CONTENT_BATCH_SIZE) {
     const batch = selectedPaths.slice(i, i + CONTENT_BATCH_SIZE);
-    const contentByPath = await readBlobContents(repoPath, "HEAD", batch);
+    // Fetch each batch in a single git invocation rather than spawning one
+    // process per file.
+    const requests = batch.map((path) => ({
+    revision: "HEAD",
+    path,
+    }));
+    const contentByRevision = await readBlobContents(repoPath, requests);
+    const headContent = contentByRevision.get("HEAD");
+
+    if (!headContent) continue;
+
     for (const path of batch) {
-      const content = contentByPath.get(path);
-      // This caller intentionally reads from HEAD (the current repository
-      // snapshot). readBlobContents also supports arbitrary revisions, but this
-      // flow only needs the checked-out HEAD state.
-      //
-      // Missing only if readBlobContents' fail-quiet path was hit
-      // (e.g. a concurrent history rewrite mid-read) — skip rather than
-      // include a file with no content.
-      if (content !== undefined) files.push({ path, content });
+      const content = headContent.get(path);
+
+      if (content !== undefined) {
+        files.push({ path, content });
+      }
     }
     opts.onProgress?.(Math.min(i + CONTENT_BATCH_SIZE, selectedPaths.length), selectedPaths.length);
   }
